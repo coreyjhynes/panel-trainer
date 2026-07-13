@@ -14,7 +14,7 @@ panel-trainer/
 │   ├── lib/handler.js  lib/store.js     # request logic + storage
 │   └── scores/ function.json  index.js  # GET/POST/DELETE /api/scores
 ├── dev-server.js                        # LOCAL testing only (Node)
-└── submit-score.ps1                     # PowerShell: submit one state, return Pass + Details
+└── score-panel.ps1                      # self-contained PowerShell scorer (paste into any engine)
 ```
 
 ## API
@@ -31,12 +31,12 @@ All routes are **anonymous** (unauthenticated), per requirement.
 ```bash
 node dev-server.js            # http://localhost:8781  (serves app + API)
 ```
-Then in another terminal:
-```powershell
-.\submit-score.ps1 -ApiBase http://localhost:8781
-```
 The dev server uses the same `handler.js` as the Function, with an in-memory
 store (data resets when it stops).
+
+`score-panel.ps1` is separate: a fully self-contained PowerShell scorer (no
+API, no parameters) intended to be pasted into an external grading engine. Edit
+its "PANEL UNDER TEST" block, and it returns `$Pass` (bool) + `$Details` (string[]).
 
 ## Deploy
 
@@ -78,17 +78,15 @@ The API auto-creates the Table on first write. Table Storage cost for training
 volumes is effectively pennies. (Swap in Cosmos DB / Azure SQL later if you want
 richer querying — only `api/lib/store.js` changes.)
 
-## Score from PowerShell
-```powershell
-$r = .\submit-score.ps1 -ApiBase https://<name>.azurestaticapps.net
-$r.Pass          # $true / $false  (PASS / FAIL)
-$r.Details       # string[] of findings
-(.\submit-score.ps1 -Miswire).Pass   # $false
-```
+## Scoring
+- **Interactive app:** the trainer POSTs the panel state to `/api/scores`; the
+  Function scores it (`api/lib/scoring.js`) and returns the result.
+- **External grading engine:** paste `score-panel.ps1` in. It embeds the same
+  NEC logic, needs no API/network, and returns `$Pass` (bool) + `$Details` (string[]).
 
 ## Notes
 - The **GitHub Pages** copy stays static/localStorage-only (Pages can't run the
   Functions). Use the **Azure** URL for the live API.
 - The write endpoint is unauthenticated by request — fine on a trusted/POC setup.
   If public spam becomes a concern, add a shared-secret header check in
-  `api/lib/handler.js` (and send it from `app.js` + `submit-score.ps1`).
+  `api/lib/handler.js` (and send it from `app.js`).
