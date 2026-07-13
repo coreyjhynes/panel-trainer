@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel Install Trainer — POC</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">⚡</span>
+    <div>
+      <h1>Service Panel Install Trainer</h1>
+      <p class="subtitle">Proof of concept · US residential load center</p>
+    </div>
+  </div>
+  <nav class="tabs">
+    <button class="tab active" data-tab="sim">Simulator</button>
+    <button class="tab" data-tab="records">Records</button>
+  </nav>
+</header>
+
+<!-- ===================== SIMULATOR ===================== -->
+<main id="tab-sim" class="tabpane active">
+  <section class="setup" id="setup">
+    <div class="setup-row">
+      <label>Trainee name
+        <input type="text" id="traineeName" placeholder="e.g. Jordan Rivera" autocomplete="off">
+      </label>
+      <label>Difficulty
+        <select id="difficulty">
+          <option value="basic">Basic (5 circuits)</option>
+          <option value="standard" selected>Standard (7 circuits)</option>
+          <option value="advanced">Advanced (9 circuits)</option>
+        </select>
+      </label>
+      <button class="btn primary" id="startBtn">Start job</button>
+    </div>
+    <p class="hint">A work order is generated with required circuits. Assign each to a panel slot and configure the breaker &amp; wire to meet code, then run the inspection.</p>
+  </section>
+
+  <div class="workspace hidden" id="workspace">
+    <!-- Panel -->
+    <div class="panel-wrap">
+      <div class="panel-header">
+        <h2>Load Center</h2>
+        <span class="mono" id="panelRating">200A · 40 spaces</span>
+      </div>
+      <div class="main-breaker">MAIN · <span id="mainRating">200A</span></div>
+      <div class="slots" id="slots"></div>
+      <div class="legend">
+        <span><i class="sw sw-empty"></i>Empty</span>
+        <span><i class="sw sw-filled"></i>Assigned</span>
+        <span><i class="sw sw-240"></i>240V (2-pole)</span>
+      </div>
+    </div>
+
+    <!-- Work order -->
+    <div class="order-wrap">
+      <div class="order-header">
+        <h2>Work Order</h2>
+        <div class="order-actions">
+          <button class="btn" id="resetBtn">Reset job</button>
+          <button class="btn primary" id="inspectBtn">Run inspection</button>
+        </div>
+      </div>
+      <div id="circuitList" class="circuit-list"></div>
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div class="result hidden" id="result"></div>
+</main>
+
+<!-- ===================== RECORDS ===================== -->
+<main id="tab-records" class="tabpane">
+  <section class="records">
+    <div class="records-header">
+      <h2>Scoring Records</h2>
+      <div class="records-actions">
+        <button class="btn" id="exportCsv">Export CSV</button>
+        <button class="btn" id="exportJson">Export JSON</button>
+        <button class="btn danger" id="clearRecords">Clear all</button>
+      </div>
+    </div>
+    <div class="filters">
+      <input type="text" id="filterName" placeholder="Filter by trainee…">
+      <select id="filterPass">
+        <option value="">All results</option>
+        <option value="pass">Passed only</option>
+        <option value="fail">Failed only</option>
+      </select>
+      <input type="number" id="filterMinScore" placeholder="Min score %" min="0" max="100">
+    </div>
+    <div class="stats" id="recordStats"></div>
+    <div class="table-wrap">
+      <table id="recordsTable">
+        <thead>
+          <tr>
+            <th>Date</th><th>Trainee</th><th>Difficulty</th>
+            <th>Score</th><th>Result</th><th>Faults</th><th>Time</th><th></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="hint">Records are stored locally in this browser (<span class="mono">localStorage</span>). Export to CSV/JSON to query in Excel, a database, or a notebook.</p>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
