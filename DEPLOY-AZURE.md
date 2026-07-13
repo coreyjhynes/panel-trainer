@@ -14,7 +14,7 @@ panel-trainer/
 │   ├── lib/handler.js  lib/store.js     # request logic + storage
 │   └── scores/ function.json  index.js  # GET/POST/DELETE /api/scores
 ├── dev-server.js                        # LOCAL testing only (Node)
-└── score-and-pull.ps1                   # PowerShell: submit state + pull results
+└── submit-score.ps1                     # PowerShell: submit one state, return Pass + Details
 ```
 
 ## API
@@ -33,7 +33,7 @@ node dev-server.js            # http://localhost:8781  (serves app + API)
 ```
 Then in another terminal:
 ```powershell
-.\score-and-pull.ps1 -ApiBase http://localhost:8781
+.\submit-score.ps1 -ApiBase http://localhost:8781
 ```
 The dev server uses the same `handler.js` as the Function, with an in-memory
 store (data resets when it stops).
@@ -78,10 +78,12 @@ The API auto-creates the Table on first write. Table Storage cost for training
 volumes is effectively pennies. (Swap in Cosmos DB / Azure SQL later if you want
 richer querying — only `api/lib/store.js` changes.)
 
-## Pull scores
+## Score from PowerShell
 ```powershell
-.\score-and-pull.ps1 -ApiBase https://<name>.azurestaticapps.net
-.\score-and-pull.ps1 -ApiBase https://<name>.azurestaticapps.net -Miswire -CsvPath scores.csv
+$r = .\submit-score.ps1 -ApiBase https://<name>.azurestaticapps.net
+$r.Pass          # $true / $false  (PASS / FAIL)
+$r.Details       # string[] of findings
+(.\submit-score.ps1 -Miswire).Pass   # $false
 ```
 
 ## Notes
@@ -89,4 +91,4 @@ richer querying — only `api/lib/store.js` changes.)
   Functions). Use the **Azure** URL for the live API.
 - The write endpoint is unauthenticated by request — fine on a trusted/POC setup.
   If public spam becomes a concern, add a shared-secret header check in
-  `api/lib/handler.js` (and send it from `app.js` + `score-and-pull.ps1`).
+  `api/lib/handler.js` (and send it from `app.js` + `submit-score.ps1`).
