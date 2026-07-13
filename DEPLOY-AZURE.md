@@ -16,7 +16,8 @@ panel-trainer/
 │   ├── lib/handler.js  lib/store.js   # router + Table Storage (in-memory fallback)
 │   └── scores/ function.json  index.js  # single Function, route {*rest}
 ├── dev-server.js                # LOCAL testing only (Node, in-memory store)
-└── run-inspection.ps1           # grade the live panel vs a scenario -> Pass + Details
+├── score-scenario.ps1          # grade the live panel vs a scenario -> Pass + Details
+└── complete-scenario.ps1       # build a scenario's 100% solution into the live panel
 ```
 
 ## API (all anonymous)
@@ -57,9 +58,10 @@ node dev-server.js            # http://localhost:8781  (serves app + API)
 The dev server uses the same `handler.js` as the Function, with an in-memory
 store (data resets when it stops).
 
-`run-inspection.ps1` grades the live panel against a scenario: set `$ApiBase`
-and `$ScenarioId`, and it returns `$Pass` (bool) + `$Details` (string[]). The
-application scores; the script only calls `/api/inspect`.
+`score-scenario.ps1` grades the live panel against a scenario (returns `$Pass` +
+`$Details`); `complete-scenario.ps1` builds the scenario's 100% solution into the
+live panel. Both take `$ApiBase`, `$ScenarioId`, `$SessionId`. The application
+does the scoring/solving; the scripts only call the API.
 
 ## Deploy
 
