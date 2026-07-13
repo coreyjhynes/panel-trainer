@@ -4,7 +4,7 @@
     "exclude": ["/api/*", "/*.css", "/*.js", "/*.md"]
   },
   "routes": [
-    { "route": "/api/scores", "methods": ["GET", "POST", "DELETE", "OPTIONS"], "allowedRoles": ["anonymous"] }
+    { "route": "/api/*", "methods": ["GET", "POST", "DELETE", "OPTIONS"], "allowedRoles": ["anonymous"] }
   ],
   "mimeTypes": {
     ".md": "text/markdown",

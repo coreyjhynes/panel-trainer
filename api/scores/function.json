@@ -6,7 +6,7 @@
       "direction": "in",
       "name": "req",
       "methods": ["get", "post", "delete"],
-      "route": "scores"
+      "route": "{resource}"
     },
     {
       "type": "http",

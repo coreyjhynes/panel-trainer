@@ -30,15 +30,15 @@ const server = http.createServer((req, res) => {
   const u = new URL(req.url, `http://localhost:${PORT}`);
   if (req.method === "OPTIONS") return send(res, 204, "");
 
-  if (u.pathname === "/api/scores") {
+  if (u.pathname.startsWith("/api/")) {
+    const resource = u.pathname.slice("/api/".length);
     let body = "";
     req.on("data", c => (body += c));
     req.on("end", async () => {
-      const query = Object.fromEntries(u.searchParams.entries());
       let parsed;
       if (body) { try { parsed = JSON.parse(body); } catch { parsed = body; } }
       try {
-        const r = await handleRequest({ method: req.method, query, body: parsed });
+        const r = await handleRequest({ method: req.method, resource, body: parsed });
         send(res, r.status, JSON.stringify(r.body));
       } catch (e) {
         send(res, 500, JSON.stringify({ error: String((e && e.message) || e) }));

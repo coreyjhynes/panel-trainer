@@ -21,11 +21,20 @@ panel-trainer/
 
 | Method | Route | Purpose |
 |--------|-------|---------|
-| GET  | `/api/scores` | list records (newest first). Filters: `?trainee=`, `?min_score=`, `?pass=true|false` |
-| POST | `/api/scores` | submit a panel STATE `{circuits, units, instanceId, difficulty, durationSec}`; the API scores it server-side, upserts one record per `instanceId`, and returns the result with findings |
-| DELETE | `/api/scores` | clear all records |
+| POST | `/api/state` | the app publishes its current panel `{circuits, units, difficulty}` (synced on every change) |
+| GET  | `/api/state` | read the currently-stored panel |
+| DELETE | `/api/state` | clear it |
+| GET  | `/api/inspect` | **Run inspection**: the app scores the currently-stored panel and returns `{pass, score, faults, critical, details}` |
 
-All routes are **anonymous** (unauthenticated), per requirement.
+All routes are **anonymous** (unauthenticated), per requirement. The panel lives
+in the app and is synced to `/api/state`; nobody submits a panel to inspect.
+
+> **Serverless caveat:** the current panel is held in-memory per Functions
+> worker (no durable storage, by choice). A single active session normally hits
+> one warm worker, so the browser's sync and the script's `/api/inspect` see the
+> same panel. If Azure scales to a second worker they could diverge; add a tiny
+> Storage row for the current state, or host the API as a single always-on
+> instance, if you need multi-worker reliability.
 
 ## Test locally first (no Azure needed)
 ```bash

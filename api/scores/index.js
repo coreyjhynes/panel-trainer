@@ -1,13 +1,11 @@
-/* Azure Function (v3 model): GET/POST/DELETE /api/scores — anonymous. */
+/* Azure Function (v3 model): handles /api/{resource} - anonymous.
+   resource is "state" or "inspect" (see api/lib/handler.js). */
 const { handleRequest } = require("../lib/handler");
 
 module.exports = async function (context, req) {
   try {
-    const result = await handleRequest({
-      method: req.method,
-      query: req.query || {},
-      body: req.body,
-    });
+    const resource = (req.params && req.params.resource) || "";
+    const result = await handleRequest({ method: req.method, resource, body: req.body });
     context.res = {
       status: result.status,
       headers: {

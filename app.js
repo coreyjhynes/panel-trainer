@@ -177,6 +177,7 @@ function renderPanel() {
     }
     slotsEl.appendChild(div);
   }
+  syncState();   // publish the live panel to the server after any change
 }
 
 function attachTerminalDrops(div, u) {
@@ -285,29 +286,37 @@ function renderRequirements() {
 /* ======================================================================= */
 /*  Inspection (external scoring) + Records tab                            */
 /* ======================================================================= */
-/* The current panel state, sent to the API which scores it. */
+/* The current panel state that lives in the app. */
 function currentState() {
   return {
-    instanceId: job.instanceId,
     difficulty: job.difficulty,
-    durationSec: Math.round((Date.now() - job.startTs) / 1000),
     circuits: job.circuits.map(c => ({ uid: c.uid, name: c.name, v: c.v, amps: c.amps, wire: c.wire, protection: c.protection, hvac: !!c.hvac, mca: c.mca, mocp: c.mocp })),
     units: job.units.map(u => ({ id: u.id, slot: u.slot, poles: u.poles, amps: u.amps, type: u.type, terminals: u.terminals })),
   };
 }
 
-/* POST the state to the external scorer; render the single returned result. */
+/* Publish the app's current panel to the server so /api/inspect (used by both
+   this button and the PowerShell script) always scores the live panel. */
+function syncState() {
+  if (!job) return;
+  try {
+    fetch(`${API_BASE}/api/state`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(currentState()) }).catch(() => {});
+  } catch (_) { /* ignore (e.g. static hosting with no API) */ }
+}
+
+/* "Run inspection": sync the panel, then ask the app to inspect it. */
 async function runInspection() {
   if (!job) { renderRecordsTab(); return; }
   const btn = $("#inspectBtn"), label = btn.textContent;
   btn.disabled = true; btn.textContent = "Scoring…";
   try {
-    const res = await fetch(`${API_BASE}/api/scores`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(currentState()) });
+    await fetch(`${API_BASE}/api/state`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(currentState()) });
+    const res = await fetch(`${API_BASE}/api/inspect`);
     if (!res.ok) throw new Error("HTTP " + res.status);
     renderResult(await res.json());
   } catch (e) {
     const el = $("#result"); el.classList.remove("hidden");
-    el.innerHTML = `<div class="finding fail"><span class="icon">❌</span><span><span class="fname">Scoring service unavailable:</span> <span class="fmsg">${escapeHtml(e.message)}. Scoring runs on the external API — use the Azure deployment or run dev-server.js.</span></span></div>`;
+    el.innerHTML = `<div class="finding fail"><span class="icon">❌</span><span><span class="fname">Scoring service unavailable:</span> <span class="fmsg">${escapeHtml(e.message)}. Scoring runs in the app's API — use the Azure deployment or run dev-server.js.</span></span></div>`;
   } finally {
     btn.disabled = false; btn.textContent = label;
   }

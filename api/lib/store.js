@@ -7,6 +7,12 @@ const CONN = process.env.AZURE_STORAGE_CONNECTION_STRING;
 const TABLE = process.env.SCORES_TABLE || "scores";
 let memory = [];
 
+// The single "current panel" synced from the running app. In-memory (per
+// worker) so no durable storage is used; see DEPLOY-AZURE.md for the caveat.
+let currentState = null;
+async function setState(s) { currentState = s; }
+async function getState() { return currentState; }
+
 async function getClient() {
   if (!CONN) return null;
   const { TableClient } = require("@azure/data-tables");
@@ -54,4 +60,4 @@ async function clearScores() {
   for await (const e of client.listEntities()) await client.deleteEntity(e.partitionKey, e.rowKey);
 }
 
-module.exports = { listScores, addScore, upsertScore, clearScores, usingTable: !!CONN };
+module.exports = { listScores, addScore, upsertScore, clearScores, setState, getState, usingTable: !!CONN };
