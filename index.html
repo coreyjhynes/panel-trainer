@@ -16,15 +16,64 @@
     </div>
   </div>
   <nav class="tabs">
-    <button class="tab active" data-tab="sim">Simulator</button>
+    <button class="tab active" data-tab="sim">Panel</button>
     <button class="tab" data-tab="req">Requirements</button>
     <button class="tab" data-tab="records">Records</button>
   </nav>
 </header>
 
-<!-- ===================== SIMULATOR ===================== -->
+<!-- ===================== PANEL (workbench) ===================== -->
 <main id="tab-sim" class="tabpane active">
-  <section class="setup" id="setup">
+  <div id="noJob" class="empty-note">No job loaded. Go to the <b>Requirements</b> tab, set the trainee &amp; difficulty, and start a job.</div>
+
+  <div id="simLayout" class="sim-layout hidden">
+    <!-- Hardware rail (sticky, on the side) -->
+    <aside class="rail">
+      <div class="bin">
+        <div class="bin-title">Breakers</div>
+        <div class="bin-hint">Set poles &amp; type, then drag an amp into an empty slot.</div>
+        <div class="segs">
+          <div class="seg" data-seg="poles">
+            <button data-val="1" class="on">1-pole</button>
+            <button data-val="2">2-pole</button>
+          </div>
+          <div class="seg" data-seg="type">
+            <button data-val="standard" class="on">Std</button>
+            <button data-val="gfci">GFCI</button>
+            <button data-val="afci">AFCI</button>
+            <button data-val="dual">Dual</button>
+          </div>
+        </div>
+        <div class="tiles" id="breakerTiles"></div>
+      </div>
+      <div class="bin">
+        <div class="bin-title">Wire</div>
+        <div class="bin-hint">Drag a gauge onto a breaker <b>terminal</b> (each pole).</div>
+        <div class="tiles" id="wireTiles"></div>
+      </div>
+      <div class="rail-actions">
+        <button class="btn" id="resetBtn">Reset panel</button>
+        <button class="btn primary" id="inspectBtn">Run inspection</button>
+      </div>
+    </aside>
+
+    <!-- The load center -->
+    <section class="panel-wrap">
+      <div class="panel-header">
+        <h2>Load Center</h2>
+        <span class="mono" id="panelRating"></span>
+      </div>
+      <div class="main-breaker">MAIN · 200A</div>
+      <div class="deadfront" id="slots"></div>
+    </section>
+  </div>
+
+  <div class="result hidden" id="result"></div>
+</main>
+
+<!-- ===================== REQUIREMENTS ===================== -->
+<main id="tab-req" class="tabpane">
+  <section class="records">
     <div class="setup-row">
       <label>Trainee name
         <input type="text" id="traineeName" placeholder="e.g. Jordan Rivera" autocomplete="off">
@@ -36,77 +85,25 @@
           <option value="advanced">Advanced (9 circuits)</option>
         </select>
       </label>
-      <button class="btn primary" id="startBtn">Start job</button>
-    </div>
-    <p class="hint">Drag a <b>circuit ticket</b> onto panel slots to position it, then drag a <b>breaker</b> and a <b>wire</b> from the bins onto it. See the <b>Requirements</b> tab for the full spec.</p>
-  </section>
-
-  <div class="workspace hidden" id="workspace">
-    <!-- Build column: panel + parts bins -->
-    <div class="build-col">
-      <div class="panel-wrap">
-        <div class="panel-header">
-          <h2>Load Center</h2>
-          <span class="mono" id="panelRating"></span>
-        </div>
-        <div class="main-breaker">MAIN · 200A</div>
-        <div class="deadfront" id="slots"></div>
-      </div>
-
-      <div class="bins">
-        <div class="bin">
-          <div class="bin-title">Breakers <span class="bin-hint">set poles + type, then drag an amp</span></div>
-          <div class="segs">
-            <div class="seg" data-seg="poles">
-              <button data-val="1" class="on">1-pole</button>
-              <button data-val="2">2-pole</button>
-            </div>
-            <div class="seg" data-seg="type">
-              <button data-val="standard" class="on">Std</button>
-              <button data-val="gfci">GFCI</button>
-              <button data-val="afci">AFCI</button>
-              <button data-val="dual">Dual</button>
-            </div>
-          </div>
-          <div class="tiles" id="breakerTiles"></div>
-        </div>
-        <div class="bin">
-          <div class="bin-title">Wire <span class="bin-hint">drag a gauge onto a placed circuit</span></div>
-          <div class="tiles" id="wireTiles"></div>
-        </div>
-      </div>
+      <button class="btn primary" id="startBtn">Start / regenerate job</button>
     </div>
 
-    <!-- Work order tickets -->
-    <div class="order-wrap">
-      <div class="order-header">
-        <h2>Work Order</h2>
-        <div class="order-actions">
-          <button class="btn" id="resetBtn">Reset</button>
-          <button class="btn primary" id="inspectBtn">Run inspection</button>
+    <div id="reqEmpty" class="empty-note">Start a job to generate its scenario and work order.</div>
+
+    <div id="reqBody" class="hidden">
+      <div class="records-header" style="margin-top:18px">
+        <h2 id="reqTitle">Work Order</h2>
+        <div class="records-actions">
+          <button class="btn" id="copyMd">Copy markdown</button>
+          <button class="btn" id="downloadMd">Download .md</button>
         </div>
       </div>
-      <p class="hint" id="orderHint">Drag each ticket onto the panel. Grey = unplaced, green = placed.</p>
-      <div id="circuitTickets" class="ticket-list"></div>
+      <div id="reqRendered"></div>
+      <details class="md-details">
+        <summary>Raw Markdown (importable)</summary>
+        <pre id="reqMarkdown" class="md-src"></pre>
+      </details>
     </div>
-  </div>
-
-  <div class="result hidden" id="result"></div>
-</main>
-
-<!-- ===================== REQUIREMENTS ===================== -->
-<main id="tab-req" class="tabpane">
-  <section class="records">
-    <div class="records-header">
-      <h2>Scenario &amp; Requirements (Markdown)</h2>
-      <div class="records-actions">
-        <button class="btn" id="copyMd">Copy markdown</button>
-        <button class="btn" id="downloadMd">Download .md</button>
-      </div>
-    </div>
-    <p class="hint">Reflects the current job. Copy or download to import into docs, an LMS, or another tool.</p>
-    <div id="reqEmpty" class="empty-note">Start a job in the Simulator tab to generate its requirements.</div>
-    <pre id="reqMarkdown" class="md-src hidden"></pre>
   </section>
 </main>
 
