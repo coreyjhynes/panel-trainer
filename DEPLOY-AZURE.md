@@ -1,40 +1,54 @@
-# Deploy to Azure Static Web Apps (with the scores API)
+# Deploy to Azure Static Web Apps
 
-The app is a static frontend **plus** an unauthenticated `/api/scores` API
-(Azure Functions). Azure Static Web Apps hosts both together, on one origin,
-on a free tier.
+A static frontend (panel + scenario authoring) **plus** an unauthenticated API
+(Azure Functions) backed by **Azure Table Storage**. One origin, free SWA tier.
 
 ```
 panel-trainer/
-├── index.html / styles.css / app.js     # static frontend
-├── staticwebapp.config.json             # routing (anonymous /api/scores)
-├── api/                                 # managed Azure Functions
+├── index.html / app.js          # the panel workbench (only the panel + hardware)
+├── scenarios.html / scenarios.js # scenario library + authoring (dedicated URL)
+├── styles.css
+├── staticwebapp.config.json     # routing (anonymous /api/*)
+├── api/                         # managed Azure Functions
 │   ├── host.json  package.json
-│   ├── lib/scoring.js                   # server-side NEC 2023 scoring
-│   ├── lib/handler.js  lib/store.js     # request logic + storage
-│   └── scores/ function.json  index.js  # GET/POST/DELETE /api/scores
-├── dev-server.js                        # LOCAL testing only (Node)
-└── run-inspection.ps1                   # remote "Run inspection": POST panel -> app scores -> Pass + Details
+│   ├── lib/scoring.js           # NEC 2023 scoring
+│   ├── lib/scenarios.js         # catalog, 100% solution, requirements Markdown
+│   ├── lib/handler.js  lib/store.js   # router + Table Storage (in-memory fallback)
+│   └── scores/ function.json  index.js  # single Function, route {*rest}
+├── dev-server.js                # LOCAL testing only (Node, in-memory store)
+└── run-inspection.ps1           # grade the live panel vs a scenario -> Pass + Details
 ```
 
-## API
+## API (all anonymous)
 
 | Method | Route | Purpose |
 |--------|-------|---------|
-| POST | `/api/state` | the app publishes its current panel `{circuits, units, difficulty}` (synced on every change) |
-| GET  | `/api/state` | read the currently-stored panel |
-| DELETE | `/api/state` | clear it |
-| GET  | `/api/inspect` | **Run inspection**: the app scores the currently-stored panel and returns `{pass, score, faults, critical, details}` |
+| GET | `/api/catalog` | circuit palette for authoring |
+| GET | `/api/scenarios` | list scenarios |
+| POST | `/api/scenarios` | create/update a scenario `{id?,title,description,circuits}` |
+| GET | `/api/scenarios/{id}` | one scenario + its requirements Markdown |
+| DELETE | `/api/scenarios/{id}` | delete a scenario |
+| POST | `/api/state` | the panel app publishes its live panel `{units, clientId}` |
+| GET | `/api/state` | read the live panel (`units, rev, setBy`) |
+| POST | `/api/inspect` | score the live panel against a scenario `{scenarioId}` → `{pass, score, details}` |
+| POST | `/api/complete` | build the scenario's 100% solution into the live panel `{scenarioId}` |
 
-All routes are **anonymous** (unauthenticated), per requirement. The panel lives
-in the app and is synced to `/api/state`; nobody submits a panel to inspect.
+**Flow:** author scenarios at `scenarios.html` (each gets an id + Markdown for
+lab instructions). The panel app publishes its build to `/api/state` and polls
+it. A grader calls `/api/inspect {scenarioId}`; `/api/complete {scenarioId}`
+sets the panel to the solution and the panel page refreshes to it.
 
-> **Serverless caveat:** the current panel is held in-memory per Functions
-> worker (no durable storage, by choice). A single active session normally hits
-> one warm worker, so the browser's sync and the script's `/api/inspect` see the
-> same panel. If Azure scales to a second worker they could diverge; add a tiny
-> Storage row for the current state, or host the API as a single always-on
-> instance, if you need multi-worker reliability.
+## Storage
+Scenarios and the live panel persist in **Azure Table Storage** (tables
+`scenarios`, `runtime`). The Static Web App reads the connection string from the
+app setting `AZURE_STORAGE_CONNECTION_STRING`. Provisioned:
+`az storage account create -n <name> -g <rg> --sku Standard_LRS` then
+`az staticwebapp appsettings set -n <swa> -g <rg> --setting-names AZURE_STORAGE_CONNECTION_STRING=<conn>`.
+Without the setting the API falls back to in-memory (local dev).
+
+> Note: the live panel is a single shared record — fine for one active
+> session/lab instance. Multi-tenant (many concurrent students) would need a
+> per-session key; not yet implemented.
 
 ## Test locally first (no Azure needed)
 ```bash
@@ -43,10 +57,9 @@ node dev-server.js            # http://localhost:8781  (serves app + API)
 The dev server uses the same `handler.js` as the Function, with an in-memory
 store (data resets when it stops).
 
-`run-inspection.ps1` is the PowerShell equivalent of the app's "Run inspection"
-button: it POSTs a panel to the API, the **application** scores it, and the
-script returns `$Pass` (bool) + `$Details` (string[]). No scoring logic in the
-script. Point its `$ApiBase` at your local dev server or the Azure URL.
+`run-inspection.ps1` grades the live panel against a scenario: set `$ApiBase`
+and `$ScenarioId`, and it returns `$Pass` (bool) + `$Details` (string[]). The
+application scores; the script only calls `/api/inspect`.
 
 ## Deploy
 
@@ -74,30 +87,10 @@ az staticwebapp create \
   --login-with-github
 ```
 
-## Make scores durable (recommended)
-Without storage config the API keeps records **in memory** (they reset when the
-Function instance recycles). To persist, add an Azure **Storage Account** and set
-these in the Static Web App → **Configuration → Application settings**:
-
-| Name | Value |
-|------|-------|
-| `AZURE_STORAGE_CONNECTION_STRING` | your storage account connection string |
-| `SCORES_TABLE` | `scores` *(optional; default is `scores`)* |
-
-The API auto-creates the Table on first write. Table Storage cost for training
-volumes is effectively pennies. (Swap in Cosmos DB / Azure SQL later if you want
-richer querying — only `api/lib/store.js` changes.)
-
-## Scoring
-- **Interactive app:** the trainer POSTs the panel state to `/api/scores`; the
-  Function scores it (`api/lib/scoring.js`) and returns the result.
-- **External grading engine:** paste `run-inspection.ps1` in. It sends the panel
-  to the API (the application scores it) and returns `$Pass` (bool) + `$Details`
-  (string[]). All scoring logic stays in the app.
-
 ## Notes
-- The **GitHub Pages** copy stays static/localStorage-only (Pages can't run the
-  Functions). Use the **Azure** URL for the live API.
-- The write endpoint is unauthenticated by request — fine on a trusted/POC setup.
-  If public spam becomes a concern, add a shared-secret header check in
-  `api/lib/handler.js` (and send it from `app.js`).
+- The **GitHub Pages** copy is static-only (no Functions/storage). Use the
+  **Azure** URL for the full app + API.
+- Endpoints are unauthenticated by request — fine on a trusted/POC setup. If
+  needed, add a shared-secret header check in `api/lib/handler.js`.
+- Table Storage cost for training volumes is effectively pennies; the API
+  auto-creates the tables on first write.
