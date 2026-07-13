@@ -16,15 +16,15 @@
     </div>
   </div>
   <nav class="tabs">
-    <button class="tab active" data-tab="sim">Panel</button>
-    <button class="tab" data-tab="req">Requirements</button>
+    <button class="tab active" data-tab="req">Requirements</button>
+    <button class="tab" data-tab="sim">Panel</button>
     <button class="tab" data-tab="records">Records</button>
   </nav>
 </header>
 
 <!-- ===================== PANEL (workbench) ===================== -->
-<main id="tab-sim" class="tabpane active">
-  <div id="noJob" class="empty-note">No job loaded. Go to the <b>Requirements</b> tab, set the trainee &amp; difficulty, and start a job.</div>
+<main id="tab-sim" class="tabpane">
+  <div id="noJob" class="empty-note">No job loaded. Go to the <b>Requirements</b> tab, choose a difficulty, and start a job.</div>
 
   <div id="simLayout" class="sim-layout hidden">
     <!-- Hardware rail (sticky, on the side) -->
@@ -72,12 +72,9 @@
 </main>
 
 <!-- ===================== REQUIREMENTS ===================== -->
-<main id="tab-req" class="tabpane">
+<main id="tab-req" class="tabpane active">
   <section class="records">
     <div class="setup-row">
-      <label>Trainee name
-        <input type="text" id="traineeName" placeholder="e.g. Jordan Rivera" autocomplete="off">
-      </label>
       <label>Difficulty
         <select id="difficulty">
           <option value="basic">Basic (5 circuits)</option>
@@ -122,7 +119,6 @@
     </div>
     <div class="source-note" id="sourceNote">Source: <b>this browser</b> (localStorage)</div>
     <div class="filters">
-      <input type="text" id="filterName" placeholder="Filter by trainee…">
       <select id="filterPass">
         <option value="">All results</option>
         <option value="pass">Passed only</option>
@@ -134,7 +130,7 @@
     <div class="table-wrap">
       <table id="recordsTable">
         <thead>
-          <tr><th>Date</th><th>Trainee</th><th>Difficulty</th><th>Score</th><th>Result</th><th>Faults</th><th>Time</th><th></th></tr>
+          <tr><th>Date</th><th>Difficulty</th><th>Score</th><th>Result</th><th>Faults</th><th>Time</th><th></th></tr>
         </thead>
         <tbody></tbody>
       </table>

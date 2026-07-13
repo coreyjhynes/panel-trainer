@@ -4,7 +4,7 @@
    Code: NEC 2023 (conservative). See NEC-2023-VALIDATION.md.
 
    Flow:
-     • Requirements tab: set trainee + difficulty, generate a job. It shows a
+     • Requirements tab: set difficulty, generate a job. It shows a
        self-contained work order (scenario + spec table + grading + markdown).
      • Panel tab: a graphical load center + a side rail of hardware. Drag a
        BREAKER (configured poles + type) into an empty slot, then drag WIRE
@@ -364,12 +364,10 @@ function jobRows() {
   }));
 }
 function jobMarkdown() {
-  const trainee = ($("#traineeName").value || "—").trim();
   const L = [];
   L.push(`# Panel Install Work Order`, ``);
   L.push(`- **Panel:** Square D Homeline ${PANEL_MODEL} — 200 A main breaker, 40 spaces, 120/240 V 1-phase`);
   L.push(`- **Code basis:** NEC 2023 (conservative interpretation)`);
-  L.push(`- **Trainee:** ${trainee}`);
   L.push(`- **Difficulty:** ${job.difficulty} (${job.circuits.length} circuits)`);
   L.push(`- **Generated:** ${new Date().toISOString()}`, ``);
   L.push(`## Scenario`);
@@ -424,7 +422,7 @@ async function loadFromApi() {
   }
 }
 function recordFromResult(res) {
-  return { id: "att_" + job.startTs, ts: new Date().toISOString(), trainee: ($("#traineeName").value || "Anonymous").trim(),
+  return { id: "att_" + job.startTs, ts: new Date().toISOString(),
     difficulty: job.difficulty, circuits: job.circuits.length, score: res.score, pass: res.pass, faults: res.faults, critical: res.critical, durationSec: res.durationSec };
 }
 function renderRecords() {
@@ -434,15 +432,15 @@ function renderRecords() {
   note.classList.toggle("api", isApi);
   note.innerHTML = isApi ? `Source: <b>API (${escapeHtml(location.host)})</b> — server data` : `Source: <b>this browser</b> (localStorage)`;
 
-  const nameF = $("#filterName").value.trim().toLowerCase(), passF = $("#filterPass").value, minF = Number($("#filterMinScore").value) || 0;
-  const rows = all.filter(r => (!nameF || String(r.trainee || "").toLowerCase().includes(nameF)) && (!passF || (passF === "pass" ? r.pass : !r.pass)) && (Number(r.score) >= minF));
+  const passF = $("#filterPass").value, minF = Number($("#filterMinScore").value) || 0;
+  const rows = all.filter(r => (!passF || (passF === "pass" ? r.pass : !r.pass)) && (Number(r.score) >= minF));
   const n = rows.length, passCount = rows.filter(r => r.pass).length, avg = n ? Math.round(rows.reduce((s, r) => s + Number(r.score), 0) / n) : 0;
   $("#recordStats").innerHTML = `<span><b>${n}</b> attempt(s)</span><span><b>${n ? Math.round((passCount / n) * 100) : 0}%</b> pass rate</span><span><b>${avg}%</b> avg score</span>`;
   const tbody = $("#recordsTable tbody"); tbody.innerHTML = "";
-  if (!rows.length) { tbody.innerHTML = `<tr class="empty-row"><td colspan="8">${isApi ? "No records on the server yet." : "No records yet. Complete an inspection on the Panel tab."}</td></tr>`; return; }
+  if (!rows.length) { tbody.innerHTML = `<tr class="empty-row"><td colspan="7">${isApi ? "No records on the server yet." : "No records yet. Complete an inspection on the Panel tab."}</td></tr>`; return; }
   for (const r of rows) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td class="mono">${new Date(r.ts).toLocaleString()}</td><td>${escapeHtml(r.trainee)}</td><td>${r.difficulty}</td>
+    tr.innerHTML = `<td class="mono">${new Date(r.ts).toLocaleString()}</td><td>${r.difficulty}</td>
       <td class="mono">${r.score}%</td><td><span class="pill ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"}</span></td>
       <td class="mono">${r.faults} (${r.critical} crit)</td><td class="mono">${r.durationSec}s</td>
       <td>${isApi ? "" : `<button class="link-btn" data-del="${r.id}">delete</button>`}</td>`;
@@ -453,7 +451,7 @@ function renderRecords() {
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function download(filename, text, type) { const blob = new Blob([text], { type }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url); }
 function exportCsv() {
-  const all = loadRecords(), cols = ["id", "ts", "trainee", "difficulty", "circuits", "score", "pass", "faults", "critical", "durationSec"];
+  const all = loadRecords(), cols = ["id", "ts", "difficulty", "circuits", "score", "pass", "faults", "critical", "durationSec"];
   const lines = [cols.join(",")].concat(all.map(r => cols.map(k => { const v = String(r[k]); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }).join(",")));
   download("panel_trainer_records.csv", lines.join("\n"), "text/csv");
 }
@@ -491,7 +489,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#copyMd").addEventListener("click", () => { if (job) navigator.clipboard?.writeText(jobMarkdown()); });
   $("#downloadMd").addEventListener("click", () => { if (job) download("panel_work_order.md", jobMarkdown(), "text/markdown"); });
 
-  ["filterName", "filterPass", "filterMinScore"].forEach(id => $("#" + id).addEventListener("input", renderRecords));
+  ["filterPass", "filterMinScore"].forEach(id => $("#" + id).addEventListener("input", renderRecords));
   $("#loadApi").addEventListener("click", loadFromApi);
   $("#showLocal").addEventListener("click", () => { apiRecords = null; renderRecords(); });
   $("#exportCsv").addEventListener("click", exportCsv);
