@@ -53,24 +53,27 @@ async function deleteScenario(id) {
   try { await t.deleteEntity("s", id); } catch (_) {}
 }
 
-/* ---- Live panel state (single current panel + revision) ----------------- */
-let stateMem = { units: [], rev: 0, setBy: null, updatedAt: null };
+/* ---- Live panel state, keyed by session (multi-tenant) ------------------ */
+let stateMem = {};   // sessionId -> {units, rev, setBy, updatedAt}
+const sid = (s) => String(s || "default").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 60) || "default";
 
-async function getState() {
+async function getState(sessionId) {
+  const key = sid(sessionId);
   const t = await table("runtime");
-  if (!t) return { ...stateMem };
+  if (!t) return stateMem[key] ? { ...stateMem[key] } : { units: [], rev: 0, setBy: null, updatedAt: null };
   try {
-    const e = await t.getEntity("r", "panel");
+    const e = await t.getEntity("r", key);
     let units = []; try { units = JSON.parse(e.units || "[]"); } catch (_) {}
     return { units, rev: Number(e.rev) || 0, setBy: e.setBy || null, updatedAt: e.updatedAt || null };
   } catch (_) { return { units: [], rev: 0, setBy: null, updatedAt: null }; }
 }
-async function setState(units, setBy) {
-  const cur = await getState();
+async function setState(sessionId, units, setBy) {
+  const key = sid(sessionId);
+  const cur = await getState(key);
   const next = { units: Array.isArray(units) ? units : [], rev: (cur.rev || 0) + 1, setBy: setBy || null, updatedAt: new Date().toISOString() };
   const t = await table("runtime");
-  if (!t) { stateMem = next; return next; }
-  await t.upsertEntity({ partitionKey: "r", rowKey: "panel", units: JSON.stringify(next.units), rev: next.rev, setBy: next.setBy, updatedAt: next.updatedAt }, "Replace");
+  if (!t) { stateMem[key] = next; return next; }
+  await t.upsertEntity({ partitionKey: "r", rowKey: key, units: JSON.stringify(next.units), rev: next.rev, setBy: next.setBy, updatedAt: next.updatedAt }, "Replace");
   return next;
 }
 

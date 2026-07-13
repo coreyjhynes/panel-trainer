@@ -108,14 +108,18 @@ function download(name, text, type) {
 }
 
 /* ---- Try on the live panel -------------------------------------------- */
+function testSession() { return ($("#fSession") && $("#fSession").value.trim()) || "default"; }
+
 async function completeToPanel() {
   if (!current.id) { alert("Save the scenario first."); return; }
-  await api("POST", "complete", { scenarioId: current.id });
-  $("#tryOut").innerHTML = `Sent the 100% solution to the live panel — open the <a href="index.html">Panel</a> and it will refresh to the completed build.`;
+  const session = testSession();
+  await api("POST", "complete", { scenarioId: current.id, sessionId: session });
+  const link = session === "default" ? "index.html" : "index.html?session=" + encodeURIComponent(session);
+  $("#tryOut").innerHTML = `Sent the 100% solution to session <b>${escapeHtml(session)}</b> — open the <a href="${link}">Panel</a> and it refreshes to the completed build.`;
 }
 async function inspectPanel() {
   if (!current.id) { alert("Save the scenario first."); return; }
-  const r = await api("POST", "inspect", { scenarioId: current.id });
+  const r = await api("POST", "inspect", { scenarioId: current.id, sessionId: testSession() });
   const lines = (r.details || []).flatMap(d => d.issues.map(i => `${i.level.toUpperCase()} — ${d.name}: ${i.text}`));
   $("#tryOut").innerHTML = `<b>${r.pass ? "PASS" : "FAIL"} · ${r.score}%</b> (${r.faults} fault, ${r.critical} critical)<br>` +
     lines.map(escapeHtml).join("<br>");

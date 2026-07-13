@@ -32,13 +32,14 @@ const server = http.createServer((req, res) => {
 
   if (u.pathname.startsWith("/api/")) {
     const path = u.pathname.slice("/api/".length);
+    const query = Object.fromEntries(u.searchParams.entries());
     let body = "";
     req.on("data", c => (body += c));
     req.on("end", async () => {
       let parsed;
       if (body) { try { parsed = JSON.parse(body); } catch { parsed = body; } }
       try {
-        const r = await handleRequest({ method: req.method, path, body: parsed });
+        const r = await handleRequest({ method: req.method, path, query, body: parsed });
         send(res, r.status, JSON.stringify(r.body));
       } catch (e) {
         send(res, 500, JSON.stringify({ error: String((e && e.message) || e) }));

@@ -12,12 +12,13 @@
 
 $ApiBase    = "https://wonderful-sea-0d849fb0f.7.azurestaticapps.net"   # the running app
 $ScenarioId = "REPLACE-WITH-SCENARIO-ID"                                # the scenario to grade against
+$SessionId  = "default"                                                 # the lab session (Skillable's ?session=<id>)
 
 # ---- Ask the app to inspect its live panel against the scenario -------------
 $ErrorActionPreference = "Stop"
 $result = Invoke-RestMethod -Uri "$($ApiBase.TrimEnd('/'))/api/inspect" -Method Post `
                             -ContentType "application/json" `
-                            -Body (@{ scenarioId = $ScenarioId } | ConvertTo-Json) -TimeoutSec 15
+                            -Body (@{ scenarioId = $ScenarioId; sessionId = $SessionId } | ConvertTo-Json) -TimeoutSec 15
 
 # ---- Shape the result -------------------------------------------------------
 $Pass = [bool]$result.pass

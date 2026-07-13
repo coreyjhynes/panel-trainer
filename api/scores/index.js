@@ -5,7 +5,7 @@ const { handleRequest } = require("../lib/handler");
 module.exports = async function (context, req) {
   try {
     const path = (req.params && req.params.rest) || "";
-    const result = await handleRequest({ method: req.method, path, body: req.body });
+    const result = await handleRequest({ method: req.method, path, query: req.query || {}, body: req.body });
     context.res = {
       status: result.status,
       headers: {

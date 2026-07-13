@@ -20,8 +20,9 @@ const parse = (b) => (typeof b === "string" ? (() => { try { return JSON.parse(b
 const slug = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
 const rand = () => Math.random().toString(36).slice(2, 8);
 
-async function handleRequest({ method, path, body }) {
+async function handleRequest({ method, path, query, body }) {
   method = (method || "GET").toUpperCase();
+  query = query || {};
   const parts = String(path || "").split("/").filter(Boolean);
   const resource = parts[0];
   const id = parts[1];
@@ -64,10 +65,10 @@ async function handleRequest({ method, path, body }) {
   if (resource === "state") {
     if (method === "POST") {
       const b = parse(body) || {};
-      const next = await store.setState(Array.isArray(b.units) ? b.units : [], b.clientId || "app");
+      const next = await store.setState(b.sessionId, Array.isArray(b.units) ? b.units : [], b.clientId || "app");
       return { status: 200, body: { rev: next.rev, setBy: next.setBy } };
     }
-    if (method === "GET") return { status: 200, body: await store.getState() };
+    if (method === "GET") return { status: 200, body: await store.getState(query.session) };
     return { status: 405, body: { error: "method not allowed" } };
   }
 
@@ -75,9 +76,9 @@ async function handleRequest({ method, path, body }) {
     const b = parse(body) || {};
     const s = await store.getScenario(b.scenarioId);
     if (!s) return { status: 404, body: { error: "unknown scenarioId", pass: false, details: [{ name: "Scenario", issues: [{ level: "fail", text: `Scenario '${b.scenarioId}' not found.` }] }] } };
-    const st = await store.getState();
+    const st = await store.getState(b.sessionId);
     const r = scoreState({ circuits: s.circuits, units: st.units });
-    return { status: 200, body: { scenarioId: s.id, scenarioTitle: s.title, pass: r.pass, score: r.score, faults: r.faults, critical: r.critical, details: r.details } };
+    return { status: 200, body: { scenarioId: s.id, scenarioTitle: s.title, sessionId: b.sessionId || "default", pass: r.pass, score: r.score, faults: r.faults, critical: r.critical, details: r.details } };
   }
 
   if (resource === "complete" && method === "POST") {
@@ -85,8 +86,8 @@ async function handleRequest({ method, path, body }) {
     const s = await store.getScenario(b.scenarioId);
     if (!s) return { status: 404, body: { error: "unknown scenarioId" } };
     const units = solutionFor(s);
-    const next = await store.setState(units, "server:complete:" + s.id);
-    return { status: 200, body: { ok: true, scenarioId: s.id, rev: next.rev, units } };
+    const next = await store.setState(b.sessionId, units, "server:complete:" + s.id);
+    return { status: 200, body: { ok: true, scenarioId: s.id, sessionId: b.sessionId || "default", rev: next.rev, units } };
   }
 
   return { status: 404, body: { error: "not found" } };

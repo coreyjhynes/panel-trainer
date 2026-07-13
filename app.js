@@ -18,6 +18,9 @@ const WIRE_TEXT = { 14: "#111", 12: "#111", 10: "#111", 8: "#fff", 6: "#fff" };
 
 const $ = (sel) => document.querySelector(sel);
 const clientId = "app_" + Math.random().toString(36).slice(2, 10);
+// Session isolates concurrent labs. Skillable opens the panel as ?session=<id>;
+// without one, we share the "default" panel (single-instance / authoring test).
+const sessionId = new URLSearchParams(location.search).get("session") || "default";
 
 /* ---- Panel state ------------------------------------------------------- */
 let panel = { units: [], nextId: 1 };
@@ -44,7 +47,7 @@ function readPayload(e) { try { return JSON.parse(e.dataTransfer.getData("applic
 
 /* ---- Server sync ------------------------------------------------------- */
 function syncState() {
-  fetch(`${API_BASE}/api/state`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ units: panel.units, clientId }) })
+  fetch(`${API_BASE}/api/state`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ units: panel.units, clientId, sessionId }) })
     .then(r => r.ok ? r.json() : null).then(j => { if (j && j.rev) localRev = j.rev; }).catch(() => {});
 }
 /* Local change: re-render then publish. */
@@ -53,7 +56,7 @@ function changed() { renderPanel(); syncState(); }
 /* Poll for external changes (e.g. CompleteScenario) and refresh the panel. */
 async function pollState() {
   try {
-    const r = await fetch(`${API_BASE}/api/state`);
+    const r = await fetch(`${API_BASE}/api/state?session=${encodeURIComponent(sessionId)}`);
     if (!r.ok) return;
     const s = await r.json();
     if (s && s.rev > localRev && s.setBy !== clientId) {
