@@ -14,7 +14,7 @@ panel-trainer/
 │   ├── lib/handler.js  lib/store.js     # request logic + storage
 │   └── scores/ function.json  index.js  # GET/POST/DELETE /api/scores
 ├── dev-server.js                        # LOCAL testing only (Node)
-└── score-panel.ps1                      # self-contained PowerShell scorer (paste into any engine)
+└── run-inspection.ps1                   # remote "Run inspection": POST panel -> app scores -> Pass + Details
 ```
 
 ## API
@@ -34,9 +34,10 @@ node dev-server.js            # http://localhost:8781  (serves app + API)
 The dev server uses the same `handler.js` as the Function, with an in-memory
 store (data resets when it stops).
 
-`score-panel.ps1` is separate: a fully self-contained PowerShell scorer (no
-API, no parameters) intended to be pasted into an external grading engine. Edit
-its "PANEL UNDER TEST" block, and it returns `$Pass` (bool) + `$Details` (string[]).
+`run-inspection.ps1` is the PowerShell equivalent of the app's "Run inspection"
+button: it POSTs a panel to the API, the **application** scores it, and the
+script returns `$Pass` (bool) + `$Details` (string[]). No scoring logic in the
+script. Point its `$ApiBase` at your local dev server or the Azure URL.
 
 ## Deploy
 
@@ -81,8 +82,9 @@ richer querying — only `api/lib/store.js` changes.)
 ## Scoring
 - **Interactive app:** the trainer POSTs the panel state to `/api/scores`; the
   Function scores it (`api/lib/scoring.js`) and returns the result.
-- **External grading engine:** paste `score-panel.ps1` in. It embeds the same
-  NEC logic, needs no API/network, and returns `$Pass` (bool) + `$Details` (string[]).
+- **External grading engine:** paste `run-inspection.ps1` in. It sends the panel
+  to the API (the application scores it) and returns `$Pass` (bool) + `$Details`
+  (string[]). All scoring logic stays in the app.
 
 ## Notes
 - The **GitHub Pages** copy stays static/localStorage-only (Pages can't run the
