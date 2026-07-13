@@ -18,9 +18,13 @@ const WIRE_TEXT = { 14: "#111", 12: "#111", 10: "#111", 8: "#fff", 6: "#fff" };
 
 const $ = (sel) => document.querySelector(sel);
 const clientId = "app_" + Math.random().toString(36).slice(2, 10);
-// Session isolates concurrent labs. Skillable opens the panel as ?session=<id>;
-// without one, we share the "default" panel (single-instance / authoring test).
-const sessionId = new URLSearchParams(location.search).get("session") || "default";
+// The session (= the trainee's Project Number) isolates concurrent labs. It is
+// entered on the intro screen (or supplied via ?session=<id>) and reused in the
+// scoring/complete scripts. Sanitised to match the server's key rules.
+const SESSION_KEY = "panelTrainer.session";
+const sanitizeSession = (s) => String(s || "").trim().replace(/[^A-Za-z0-9_-]/g, "").slice(0, 60);
+let sessionId = null;
+let pollTimer = null;
 
 /* ---- Panel state ------------------------------------------------------- */
 let panel = { units: [], nextId: 1 };
@@ -158,9 +162,55 @@ function onSlotsClick(e) {
   if (ct) { const [id, key] = ct.dataset.clearterm.split(":"); const u = unitById(Number(id)); if (u) { u.terminals[key] = null; changed(); } }
 }
 
+/* ---- Session gate ------------------------------------------------------ */
+function showIntro() {
+  $("#intro").classList.remove("hidden");
+  $("#workbench").classList.add("hidden");
+  $("#sessionTag").classList.add("hidden");
+  $("#changeBtn").classList.add("hidden");
+  const inp = $("#projectInput"); if (inp) inp.focus();
+}
+
+function submitProject() {
+  const val = sanitizeSession($("#projectInput").value);
+  const err = $("#projectErr");
+  if (!val) { err.textContent = "Enter your Project Number to continue."; err.classList.remove("hidden"); return; }
+  err.classList.add("hidden");
+  startPanel(val);
+}
+
+function changeProject() {
+  try { localStorage.removeItem(SESSION_KEY); } catch (_) {}
+  sessionId = null; $("#projectInput").value = "";
+  showIntro();
+}
+
+/* Bind to a Project Number (session) and reveal the panel. */
+function startPanel(session) {
+  sessionId = session;
+  try { localStorage.setItem(SESSION_KEY, session); } catch (_) {}
+  // fresh view; pollState() will load this session's saved panel from the server
+  panel = { units: [], nextId: 1 }; localRev = 0;
+
+  $("#intro").classList.add("hidden");
+  $("#workbench").classList.remove("hidden");
+  $("#sessionTag").textContent = "Project #: " + session;
+  $("#sessionTag").classList.remove("hidden");
+  $("#changeBtn").classList.remove("hidden");
+
+  renderBins();
+  renderPanel();
+  pollState();
+  if (!pollTimer) pollTimer = setInterval(pollState, POLL_MS);
+}
+
 /* ---- Init -------------------------------------------------------------- */
 document.addEventListener("DOMContentLoaded", () => {
   $("#panelRating").textContent = `${PANEL_MODEL} · 200A · ${SLOT_COUNT} spaces`;
+  $("#startProjectBtn").addEventListener("click", submitProject);
+  $("#projectInput").addEventListener("keydown", e => { if (e.key === "Enter") submitProject(); });
+  $("#changeBtn").addEventListener("click", changeProject);
+
   document.querySelectorAll(".seg").forEach(seg => seg.addEventListener("click", e => {
     const btn = e.target.closest("button"); if (!btn) return;
     binState[seg.dataset.seg] = seg.dataset.seg === "poles" ? Number(btn.dataset.val) : btn.dataset.val;
@@ -169,9 +219,10 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#slots").addEventListener("click", onSlotsClick);
   $("#clearBtn").addEventListener("click", () => { panel.units = []; panel.nextId = 1; changed(); });
 
-  renderBins();
-  renderPanel();
-  // Load any state already on the server (e.g. a pre-completed scenario), then poll.
-  pollState();
-  setInterval(pollState, POLL_MS);
+  // Session from ?session=<id>, else a remembered one, else prompt for it.
+  const fromUrl = sanitizeSession(new URLSearchParams(location.search).get("session"));
+  const remembered = sanitizeSession(localStorage.getItem(SESSION_KEY));
+  if (fromUrl) startPanel(fromUrl);
+  else if (remembered) startPanel(remembered);
+  else showIntro();
 });

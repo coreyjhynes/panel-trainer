@@ -16,13 +16,31 @@
     </div>
   </div>
   <nav class="tabs">
+    <span class="session-tag hidden" id="sessionTag"></span>
+    <button class="tab hidden" id="changeBtn">Change</button>
     <a class="tab" href="scenarios.html">Scenarios</a>
   </nav>
 </header>
 
 <main class="tabpane active">
-  <div class="sim-layout">
-    <!-- Hardware rail -->
+  <!-- Intro / session gate -->
+  <section id="intro" class="intro">
+    <div class="intro-card">
+      <h2>Enter your Project Number</h2>
+      <p>Your <b>Project Number</b> is shown in your lab instructions. It identifies your
+         panel so your work can be scored. Enter it exactly to begin.</p>
+      <label>Project Number
+        <input type="text" id="projectInput" placeholder="e.g. PRJ-4821" autocomplete="off" autofocus>
+      </label>
+      <div class="intro-actions">
+        <button class="btn primary" id="startProjectBtn">Start building</button>
+      </div>
+      <p class="err hidden" id="projectErr"></p>
+    </div>
+  </section>
+
+  <!-- Panel workbench (revealed after a Project Number is entered) -->
+  <div id="workbench" class="sim-layout hidden">
     <aside class="rail">
       <div class="bin">
         <div class="bin-title">Breakers</div>
@@ -51,7 +69,6 @@
       </div>
     </aside>
 
-    <!-- The load center -->
     <section class="panel-wrap">
       <div class="panel-header">
         <h2>Load Center</h2>
@@ -61,7 +78,6 @@
       <div class="deadfront" id="slots"></div>
     </section>
   </div>
-  <p class="hint" id="syncNote">Build the panel to meet the scenario requirements shown in your lab instructions. Your panel is saved automatically.</p>
 </main>
 
 <script src="app.js"></script>
