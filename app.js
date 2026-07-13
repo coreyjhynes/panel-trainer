@@ -14,14 +14,10 @@
 
 const PANEL_MODEL = "HOM4080M200PC";
 const SLOT_COUNT = 40;
-const STORE_KEY = "panelTrainer.records.v2";
 const PASS_THRESHOLD = 80;
 const API_BASE = "";            // same origin (Azure SWA / local dev-server)
-let apiRecords = null;          // when set, Records tab shows server data instead of localStorage
 
 /* ---- Reference data ---------------------------------------------------- */
-const WIRE_AMPACITY = { 14: 15, 12: 20, 10: 30, 8: 40, 6: 55 };      // NEC T310.16 60°C Cu
-const SMALL_COND_CAP = { 14: 15, 12: 20, 10: 30, 8: null, 6: null };  // NEC 240.4(D)
 const WIRE_OPTIONS = [14, 12, 10, 8, 6];
 const AMP_OPTIONS = [15, 20, 30, 40, 50];
 const TYPE_LABELS = { standard: "Standard", gfci: "GFCI", afci: "AFCI", dual: "Dual GFCI/AFCI" };
@@ -55,15 +51,7 @@ const DIFFICULTY = { basic: 5, standard: 7, advanced: 9 };
 /* ---- Helpers ----------------------------------------------------------- */
 const $ = (sel) => document.querySelector(sel);
 function shuffle(arr) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-function minStdAmp(a) { return AMP_OPTIONS.find(x => x >= a); }
-function needPolesOf(c) { return c.v === 240 ? 2 : 1; }
 function reqBreakerLabel(c) { return c.hvac ? `30–${c.mocp}A (≤ nameplate MOCP)` : `${c.amps}A`; }
-function protSatisfied(type, protection) {
-  return (protection === "gfci" && (type === "gfci" || type === "dual")) ||
-         (protection === "afci" && (type === "afci" || type === "dual")) ||
-         (protection === "dual" && type === "dual") ||
-         (protection === "standard" && type === "standard");
-}
 
 function buildWorkOrder(count) {
   const core = MANDATORY_POOL.slice();
@@ -96,17 +84,6 @@ function slotFree(slot, poles) {
   return need.every(n => n >= 1 && n <= SLOT_COUNT && !occ[n]);
 }
 function unitById(id) { return job.units.find(u => u.id === id); }
-
-/* Summarise the conductors landed on a unit. */
-function wireOf(u) {
-  const keys = Object.keys(u.terminals);
-  const vals = keys.map(k => u.terminals[k]).filter(v => v != null).map(Number);
-  if (vals.length === 0) return { status: "none", total: keys.length };
-  if (vals.length < keys.length) return { status: "partial", filled: vals.length, total: keys.length };
-  const uniq = [...new Set(vals)];
-  if (uniq.length > 1) return { status: "mixed", gauges: uniq };
-  return { status: "ok", gauge: uniq[0] };
-}
 
 /* ======================================================================= */
 /*  Drag & drop plumbing                                                   */
@@ -231,104 +208,8 @@ function renderPanelTab() {
   renderPanel();
 }
 
-/* ======================================================================= */
-/*  Scoring — match installed units to required circuits                   */
-/* ======================================================================= */
-function matchScore(u, c) {
-  const polesOK = u.poles === needPolesOf(c);
-  const ampsOK = c.hvac ? (u.amps >= minStdAmp(c.mca) && u.amps <= c.mocp) : (u.amps === c.amps);
-  const typeOK = protSatisfied(u.type, c.protection);
-  const w = wireOf(u);
-  const wireOK = w.status === "ok" && w.gauge === c.wire;
-  return (polesOK ? 4 : 0) + (ampsOK ? 2 : 0) + (typeOK ? 1 : 0) + (wireOK ? 1 : 0);
-}
-
-function attributeUnits() {
-  // Match specific circuits first so identical generic ones don't steal them.
-  const spec = c => (c.v === 240 ? 2 : 0) + (c.protection === "dual" ? 2 : c.protection !== "standard" ? 1 : 0) + (c.hvac ? 1 : 0);
-  const order = job.circuits.slice().sort((a, b) => spec(b) - spec(a));
-  const consumed = new Set();
-  const map = {};
-  for (const c of order) {
-    let best = -1, bestScore = 0; // require > 0 and poles/amps overlap
-    job.units.forEach((u, i) => {
-      if (consumed.has(i)) return;
-      const s = matchScore(u, c);
-      // only attribute if it at least shares poles or amps (score>=2)
-      if (s >= 2 && s > bestScore) { bestScore = s; best = i; }
-    });
-    if (best >= 0) { map[c.uid] = job.units[best]; consumed.add(best); }
-  }
-  const extras = job.units.filter((_, i) => !consumed.has(i));
-  return { map, extras };
-}
-
-function scoreJob() {
-  const { map, extras } = attributeUnits();
-  const details = [];
-  let earned = 0, max = 0, faults = 0, critical = 0;
-
-  for (const c of job.circuits) {
-    const issues = [];
-    max += 3;
-    const u = map[c.uid];
-    if (!u) {
-      issues.push({ level: "fail", text: `No matching breaker installed for this circuit (need ${reqBreakerLabel(c)}, ${needPolesOf(c)}-pole, ${PROT_LABELS[c.protection]}).` });
-      faults++; critical++;
-      details.push({ name: c.name, issues });
-      continue;
-    }
-    const { amps, type, poles } = u;
-    const needPoles = needPolesOf(c);
-
-    // 1) Breaker: poles + sizing
-    let pBreaker = 0;
-    if (poles !== needPoles) {
-      faults++; critical++;
-      issues.push({ level: "fail", text: needPoles === 2 ? "240V load requires a 2-pole breaker — a 1-pole cannot supply 240V." : "120V load should use a 1-pole breaker, not 2-pole." });
-    } else if (c.hvac) {
-      const floor = minStdAmp(c.mca);
-      if (amps > c.mocp) { faults++; critical++; issues.push({ level: "fail", text: `Breaker ${amps}A exceeds nameplate Max OCPD (${c.mocp}A) — NEC 440.4(B).` }); }
-      else if (amps < floor) { faults++; issues.push({ level: "warn", text: `Breaker ${amps}A is below the circuit MCA (${c.mca}A) — undersized.` }); }
-      else pBreaker = 1;
-    } else if (amps === c.amps) { pBreaker = 1; }
-    else { faults++; if (amps > c.amps) { critical++; issues.push({ level: "fail", text: `Breaker oversized: ${amps}A on a ${c.amps}A circuit — overcurrent/fire risk (240.4(D)).` }); } else issues.push({ level: "warn", text: `Breaker undersized: ${amps}A where ${c.amps}A is required — nuisance tripping.` }); }
-
-    // 2) Conductor (per-terminal wiring)
-    let pWire = 0;
-    const w = wireOf(u);
-    if (w.status === "none") { faults++; critical++; issues.push({ level: "fail", text: "No conductor landed on the breaker terminal(s)." }); }
-    else if (w.status === "partial") { faults++; critical++; issues.push({ level: "fail", text: `Only ${w.filled} of ${w.total} pole terminals wired — both legs of a 2-pole breaker must be landed.` }); }
-    else if (w.status === "mixed") { faults++; critical++; issues.push({ level: "fail", text: `Different gauge conductors on the poles (${w.gauges.map(g => g + " AWG").join(" & ")}) — both legs must match.` }); }
-    else {
-      const wire = w.gauge, ampacity = WIRE_AMPACITY[wire] || 0;
-      const floor = c.hvac ? c.mca : amps, cap = c.hvac ? null : SMALL_COND_CAP[wire];
-      if (ampacity < floor) { faults++; critical++; issues.push({ level: "fail", text: `Wire ${wire} AWG (${ampacity}A) undersized for ${c.hvac ? `MCA ${c.mca}A` : `${amps}A breaker`} — FIRE HAZARD.` }); }
-      else if (!c.hvac && cap != null && amps > cap) { faults++; critical++; issues.push({ level: "fail", text: `${wire} AWG limited to ${cap}A by NEC 240.4(D); ${amps}A breaker violates the small-conductor rule.` }); }
-      else if (wire !== c.wire) { pWire = 0.5; faults++; issues.push({ level: "warn", text: `Wire ${wire} AWG is adequate but spec calls for ${c.wire} AWG for this load.` }); }
-      else pWire = 1;
-    }
-
-    // 3) Protection
-    let pProt = 0;
-    if (protSatisfied(type, c.protection)) pProt = 1;
-    else if (c.protection === "dual") { faults++; critical++; issues.push({ level: "fail", text: `Requires dual-function (AFCI+GFCI); ${TYPE_LABELS[type]} provides only part — 210.8 & 210.12(B).` }); }
-    else if (c.protection === "standard") { pProt = 0.5; faults++; issues.push({ level: "warn", text: `${TYPE_LABELS[type]} breaker where a standard breaker is sufficient.` }); }
-    else { faults++; critical++; const need = c.protection === "gfci" ? "GFCI" : "AFCI"; issues.push({ level: "fail", text: `Missing ${need} protection required here — code violation / shock or arc-fault risk.` }); }
-
-    earned += pBreaker + pWire + pProt;
-    if (issues.length === 0) issues.push({ level: "ok", text: `Installed to spec (slot ${u.slot}).` });
-    details.push({ name: c.name, issues });
-  }
-
-  // Extra breakers that don't correspond to any required circuit
-  extras.forEach(u => { faults++; details.push({ name: `Extra breaker (slot ${u.slot})`, issues: [{ level: "warn", text: `${u.amps}A ${u.poles}-pole ${TYPE_LABELS[u.type]} breaker not part of the work order.` }] }); });
-
-  const score = Math.round((earned / max) * 100);
-  const pass = score >= PASS_THRESHOLD && critical === 0;
-  const durationSec = Math.round((Date.now() - job.startTs) / 1000);
-  return { score, pass, faults, critical, durationSec, details };
-}
+/* Scoring is performed server-side (api/lib/scoring.js). The app posts the
+   current panel state to /api/scores and renders the result it returns. */
 
 function renderResult(res) {
   const el = $("#result");
