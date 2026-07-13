@@ -2,6 +2,7 @@
    (api/scores/index.js) and the local dev server (dev-server.js). */
 
 const store = require("./store");
+const { scoreState } = require("./scoring");
 const crypto = require("crypto");
 
 const newId = () => "att_" + crypto.randomBytes(6).toString("hex");
@@ -34,14 +35,29 @@ async function handleRequest({ method, query, body }) {
   }
 
   if (method === "POST") {
-    let rec = body;
-    if (typeof rec === "string") { try { rec = JSON.parse(rec); } catch { return { status: 400, body: { error: "invalid json" } }; } }
-    if (!rec || typeof rec !== "object") return { status: 400, body: { error: "missing record body" } };
-    rec.id = rec.id || newId();
-    rec.ts = rec.ts || new Date().toISOString();
-    rec.receivedAt = new Date().toISOString();
-    await store.addScore(rec);
-    return { status: 201, body: rec };
+    let payload = body;
+    if (typeof payload === "string") { try { payload = JSON.parse(payload); } catch { return { status: 400, body: { error: "invalid json" } }; } }
+    if (!payload || typeof payload !== "object") return { status: 400, body: { error: "missing body" } };
+
+    // Score the submitted panel STATE server-side (external scoring).
+    const result = scoreState({ circuits: payload.circuits, units: payload.units });
+
+    // One record per instance: same instanceId replaces its previous result.
+    const rec = {
+      id: payload.instanceId || newId(),
+      ts: new Date().toISOString(),
+      difficulty: payload.difficulty || "unknown",
+      circuits: Array.isArray(payload.circuits) ? payload.circuits.length : 0,
+      score: result.score,
+      pass: result.pass,
+      faults: result.faults,
+      critical: result.critical,
+      durationSec: Number.isFinite(payload.durationSec) ? payload.durationSec : 0,
+    };
+    await store.upsertScore(rec);
+
+    // Return the stored summary PLUS the findings so the app can display them.
+    return { status: 200, body: { ...rec, details: result.details } };
   }
 
   if (method === "DELETE") {

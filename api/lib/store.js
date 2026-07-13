@@ -36,10 +36,22 @@ async function addScore(rec) {
   return rec;
 }
 
+/* Upsert: one record per instance id (re-inspecting a run replaces its result). */
+async function upsertScore(rec) {
+  const client = await getClient();
+  if (!client) {
+    memory = memory.filter((r) => r.id !== rec.id);
+    memory.unshift(rec);
+    return rec;
+  }
+  await client.upsertEntity(toEntity(rec), "Replace");
+  return rec;
+}
+
 async function clearScores() {
   const client = await getClient();
   if (!client) { memory = []; return; }
   for await (const e of client.listEntities()) await client.deleteEntity(e.partitionKey, e.rowKey);
 }
 
-module.exports = { listScores, addScore, clearScores, usingTable: !!CONN };
+module.exports = { listScores, addScore, upsertScore, clearScores, usingTable: !!CONN };

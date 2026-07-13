@@ -82,7 +82,9 @@ const binState = { poles: 1, type: "standard" };
 
 function newJob(difficulty) {
   const circuits = buildWorkOrder(DIFFICULTY[difficulty] || 7);
-  job = { difficulty, circuits, units: [], nextId: 1, startTs: Date.now() };
+  // instanceId = one run per app instance; re-inspecting upserts this record.
+  job = { difficulty, circuits, units: [], nextId: 1, startTs: Date.now(),
+    instanceId: "run_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8) };
 }
 
 /* A unit = an installed breaker. terminals: {A:gauge|null [,B]}. */
@@ -344,7 +346,7 @@ function renderResult(res) {
       <div class="score-ring" style="${ringStyle}">${inner}</div>
       <div class="score-meta">
         <h2>${res.pass ? "PASS — Inspection cleared" : "FAIL — Corrections required"}</h2>
-        <p>${res.faults} fault(s) · ${res.critical} critical hazard(s) · ${res.durationSec}s · saved to records</p>
+        <p>${res.faults} fault(s) · ${res.critical} critical hazard(s) · ${res.durationSec}s · recorded to the external scoring service</p>
       </div>
     </div>
     <div class="findings">${findings}</div>`;
@@ -400,61 +402,46 @@ function renderRequirements() {
 }
 
 /* ======================================================================= */
-/*  Records (localStorage)                                                 */
+/*  Inspection (external scoring) + Records tab                            */
 /* ======================================================================= */
-function loadRecords() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch { return []; } }
-function saveRecord(rec) { const all = loadRecords(); all.unshift(rec); localStorage.setItem(STORE_KEY, JSON.stringify(all)); }
-
-/* Best-effort push to the scores API (no-ops when running statically w/o an API). */
-function pushToApi(rec) {
-  try {
-    fetch(`${API_BASE}/api/scores`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(rec) }).catch(() => {});
-  } catch (_) { /* ignore */ }
+/* The current panel state, sent to the API which scores it. */
+function currentState() {
+  return {
+    instanceId: job.instanceId,
+    difficulty: job.difficulty,
+    durationSec: Math.round((Date.now() - job.startTs) / 1000),
+    circuits: job.circuits.map(c => ({ uid: c.uid, name: c.name, v: c.v, amps: c.amps, wire: c.wire, protection: c.protection, hvac: !!c.hvac, mca: c.mca, mocp: c.mocp })),
+    units: job.units.map(u => ({ id: u.id, slot: u.slot, poles: u.poles, amps: u.amps, type: u.type, terminals: u.terminals })),
+  };
 }
-async function loadFromApi() {
+
+/* POST the state to the external scorer; render the single returned result. */
+async function runInspection() {
+  if (!job) { renderRecordsTab(); return; }
+  const btn = $("#inspectBtn"), label = btn.textContent;
+  btn.disabled = true; btn.textContent = "Scoring…";
   try {
-    const res = await fetch(`${API_BASE}/api/scores`);
+    const res = await fetch(`${API_BASE}/api/scores`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(currentState()) });
     if (!res.ok) throw new Error("HTTP " + res.status);
-    apiRecords = await res.json();
-    renderRecords();
+    renderResult(await res.json());
   } catch (e) {
-    alert("Could not reach the scores API (" + e.message + ").\nThis works on the Azure deployment or via dev-server.js — not on plain static hosting.");
+    const el = $("#result"); el.classList.remove("hidden");
+    el.innerHTML = `<div class="finding fail"><span class="icon">❌</span><span><span class="fname">Scoring service unavailable:</span> <span class="fmsg">${escapeHtml(e.message)}. Scoring runs on the external API — use the Azure deployment or run dev-server.js.</span></span></div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = label;
   }
 }
-function recordFromResult(res) {
-  return { id: "att_" + job.startTs, ts: new Date().toISOString(),
-    difficulty: job.difficulty, circuits: job.circuits.length, score: res.score, pass: res.pass, faults: res.faults, critical: res.critical, durationSec: res.durationSec };
-}
-function renderRecords() {
-  const isApi = apiRecords != null;
-  const all = isApi ? apiRecords : loadRecords();
-  const note = $("#sourceNote");
-  note.classList.toggle("api", isApi);
-  note.innerHTML = isApi ? `Source: <b>API (${escapeHtml(location.host)})</b> — server data` : `Source: <b>this browser</b> (localStorage)`;
 
-  const passF = $("#filterPass").value, minF = Number($("#filterMinScore").value) || 0;
-  const rows = all.filter(r => (!passF || (passF === "pass" ? r.pass : !r.pass)) && (Number(r.score) >= minF));
-  const n = rows.length, passCount = rows.filter(r => r.pass).length, avg = n ? Math.round(rows.reduce((s, r) => s + Number(r.score), 0) / n) : 0;
-  $("#recordStats").innerHTML = `<span><b>${n}</b> attempt(s)</span><span><b>${n ? Math.round((passCount / n) * 100) : 0}%</b> pass rate</span><span><b>${avg}%</b> avg score</span>`;
-  const tbody = $("#recordsTable tbody"); tbody.innerHTML = "";
-  if (!rows.length) { tbody.innerHTML = `<tr class="empty-row"><td colspan="7">${isApi ? "No records on the server yet." : "No records yet. Complete an inspection on the Panel tab."}</td></tr>`; return; }
-  for (const r of rows) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td class="mono">${new Date(r.ts).toLocaleString()}</td><td>${r.difficulty}</td>
-      <td class="mono">${r.score}%</td><td><span class="pill ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"}</span></td>
-      <td class="mono">${r.faults} (${r.critical} crit)</td><td class="mono">${r.durationSec}s</td>
-      <td>${isApi ? "" : `<button class="link-btn" data-del="${r.id}">delete</button>`}</td>`;
-    tbody.appendChild(tr);
-  }
-  if (!isApi) tbody.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => { localStorage.setItem(STORE_KEY, JSON.stringify(loadRecords().filter(x => x.id !== b.dataset.del))); renderRecords(); }));
+/* Records tab holds only the inspect action + the single current result. */
+function renderRecordsTab() {
+  const has = !!job;
+  $("#noJobRecords").classList.toggle("hidden", has);
+  $("#inspectBtn").classList.toggle("hidden", !has);
+  if (!has) $("#result").classList.add("hidden");
 }
+
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function download(filename, text, type) { const blob = new Blob([text], { type }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url); }
-function exportCsv() {
-  const all = loadRecords(), cols = ["id", "ts", "difficulty", "circuits", "score", "pass", "faults", "critical", "durationSec"];
-  const lines = [cols.join(",")].concat(all.map(r => cols.map(k => { const v = String(r[k]); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }).join(",")));
-  download("panel_trainer_records.csv", lines.join("\n"), "text/csv");
-}
 
 /* ======================================================================= */
 /*  UI wiring                                                              */
@@ -465,9 +452,9 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll(".tabpane").forEach(x => x.classList.remove("active"));
     t.classList.add("active");
     $("#tab-" + t.dataset.tab).classList.add("active");
-    if (t.dataset.tab === "records") renderRecords();
     if (t.dataset.tab === "req") renderRequirements();
     if (t.dataset.tab === "sim") renderPanelTab();
+    if (t.dataset.tab === "records") renderRecordsTab();
   }));
 
   document.querySelectorAll(".seg").forEach(seg => seg.addEventListener("click", e => {
@@ -482,19 +469,14 @@ document.addEventListener("DOMContentLoaded", () => {
     $("#result").classList.add("hidden");
     renderRequirements();
     renderPanelTab();
+    renderRecordsTab();
   });
   $("#resetBtn").addEventListener("click", () => { if (job) { job.units = []; job.startTs = Date.now(); $("#result").classList.add("hidden"); renderPanel(); } });
-  $("#inspectBtn").addEventListener("click", () => { if (!job) return; const res = scoreJob(); const rec = recordFromResult(res); saveRecord(rec); pushToApi(rec); renderResult(res); });
+  $("#inspectBtn").addEventListener("click", runInspection);
 
   $("#copyMd").addEventListener("click", () => { if (job) navigator.clipboard?.writeText(jobMarkdown()); });
   $("#downloadMd").addEventListener("click", () => { if (job) download("panel_work_order.md", jobMarkdown(), "text/markdown"); });
 
-  ["filterPass", "filterMinScore"].forEach(id => $("#" + id).addEventListener("input", renderRecords));
-  $("#loadApi").addEventListener("click", loadFromApi);
-  $("#showLocal").addEventListener("click", () => { apiRecords = null; renderRecords(); });
-  $("#exportCsv").addEventListener("click", exportCsv);
-  $("#exportJson").addEventListener("click", () => download("panel_trainer_records.json", JSON.stringify(loadRecords(), null, 2), "application/json"));
-  $("#clearRecords").addEventListener("click", () => { if (confirm("Delete ALL scoring records? This cannot be undone.")) { localStorage.removeItem(STORE_KEY); renderRecords(); } });
-
   renderPanelTab();
+  renderRecordsTab();
 });

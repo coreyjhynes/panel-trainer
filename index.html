@@ -53,7 +53,6 @@
       </div>
       <div class="rail-actions">
         <button class="btn" id="resetBtn">Reset panel</button>
-        <button class="btn primary" id="inspectBtn">Run inspection</button>
       </div>
     </aside>
 
@@ -67,8 +66,6 @@
       <div class="deadfront" id="slots"></div>
     </section>
   </div>
-
-  <div class="result hidden" id="result"></div>
 </main>
 
 <!-- ===================== REQUIREMENTS ===================== -->
@@ -104,38 +101,16 @@
   </section>
 </main>
 
-<!-- ===================== RECORDS ===================== -->
+<!-- ===================== RECORDS (inspection + single result) ===================== -->
 <main id="tab-records" class="tabpane">
   <section class="records">
     <div class="records-header">
-      <h2>Scoring Records</h2>
-      <div class="records-actions">
-        <button class="btn" id="loadApi">Load from API</button>
-        <button class="btn" id="showLocal">Show local</button>
-        <button class="btn" id="exportCsv">Export CSV</button>
-        <button class="btn" id="exportJson">Export JSON</button>
-        <button class="btn danger" id="clearRecords">Clear all</button>
-      </div>
+      <h2>Run Inspection</h2>
+      <button class="btn primary hidden" id="inspectBtn">Run inspection</button>
     </div>
-    <div class="source-note" id="sourceNote">Source: <b>this browser</b> (localStorage)</div>
-    <div class="filters">
-      <select id="filterPass">
-        <option value="">All results</option>
-        <option value="pass">Passed only</option>
-        <option value="fail">Failed only</option>
-      </select>
-      <input type="number" id="filterMinScore" placeholder="Min score %" min="0" max="100">
-    </div>
-    <div class="stats" id="recordStats"></div>
-    <div class="table-wrap">
-      <table id="recordsTable">
-        <thead>
-          <tr><th>Date</th><th>Difficulty</th><th>Score</th><th>Result</th><th>Faults</th><th>Time</th><th></th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <p class="hint">Local results are stored in this browser (<span class="mono">localStorage</span>). When deployed to Azure, each inspection is also POSTed to <span class="mono">/api/scores</span> — use <b>Load from API</b> here, or pull it with <span class="mono">pull-scores.ps1</span>.</p>
+    <p class="hint">Scores the <b>current</b> state of your panel using the external scoring service and records <b>one</b> result for this run (re-running replaces it). No history is kept in the app &mdash; query results with <span class="mono">score-and-pull.ps1</span> or <span class="mono">GET /api/scores</span>.</p>
+    <div id="noJobRecords" class="empty-note">No job loaded. Choose a difficulty on the <b>Requirements</b> tab and start a job, then build your panel.</div>
+    <div class="result hidden" id="result"></div>
   </section>
 </main>
 

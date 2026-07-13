@@ -10,10 +10,11 @@ panel-trainer/
 ├── staticwebapp.config.json             # routing (anonymous /api/scores)
 ├── api/                                 # managed Azure Functions
 │   ├── host.json  package.json
-│   ├── lib/handler.js  lib/store.js     # shared logic + storage
+│   ├── lib/scoring.js                   # server-side NEC 2023 scoring
+│   ├── lib/handler.js  lib/store.js     # request logic + storage
 │   └── scores/ function.json  index.js  # GET/POST/DELETE /api/scores
 ├── dev-server.js                        # LOCAL testing only (Node)
-└── pull-scores.ps1                      # PowerShell puller
+└── score-and-pull.ps1                   # PowerShell: submit state + pull results
 ```
 
 ## API
@@ -21,7 +22,7 @@ panel-trainer/
 | Method | Route | Purpose |
 |--------|-------|---------|
 | GET  | `/api/scores` | list records (newest first). Filters: `?trainee=`, `?min_score=`, `?pass=true|false` |
-| POST | `/api/scores` | append a record (the app calls this on every inspection) |
+| POST | `/api/scores` | submit a panel STATE `{circuits, units, instanceId, difficulty, durationSec}`; the API scores it server-side, upserts one record per `instanceId`, and returns the result with findings |
 | DELETE | `/api/scores` | clear all records |
 
 All routes are **anonymous** (unauthenticated), per requirement.
@@ -32,7 +33,7 @@ node dev-server.js            # http://localhost:8781  (serves app + API)
 ```
 Then in another terminal:
 ```powershell
-.\pull-scores.ps1 -ApiBase http://localhost:8781
+.\score-and-pull.ps1 -ApiBase http://localhost:8781
 ```
 The dev server uses the same `handler.js` as the Function, with an in-memory
 store (data resets when it stops).
@@ -79,8 +80,8 @@ richer querying — only `api/lib/store.js` changes.)
 
 ## Pull scores
 ```powershell
-.\pull-scores.ps1 -ApiBase https://<name>.azurestaticapps.net
-.\pull-scores.ps1 -ApiBase https://<name>.azurestaticapps.net -Trainee "Jordan" -MinScore 80 -CsvPath scores.csv
+.\score-and-pull.ps1 -ApiBase https://<name>.azurestaticapps.net
+.\score-and-pull.ps1 -ApiBase https://<name>.azurestaticapps.net -Miswire -CsvPath scores.csv
 ```
 
 ## Notes
@@ -88,4 +89,4 @@ richer querying — only `api/lib/store.js` changes.)
   Functions). Use the **Azure** URL for the live API.
 - The write endpoint is unauthenticated by request — fine on a trusted/POC setup.
   If public spam becomes a concern, add a shared-secret header check in
-  `api/lib/handler.js` (and send it from `app.js` + `pull-scores.ps1`).
+  `api/lib/handler.js` (and send it from `app.js` + `score-and-pull.ps1`).
