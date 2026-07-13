@@ -1,0 +1,9 @@
+{
+  "name": "panel-trainer-api",
+  "version": "1.0.0",
+  "description": "Scores API for the Panel Install Trainer (Azure Static Web Apps managed Functions).",
+  "main": "scores/index.js",
+  "dependencies": {
+    "@azure/data-tables": "^13.3.1"
+  }
+}

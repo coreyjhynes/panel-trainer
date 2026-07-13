@@ -113,11 +113,14 @@
     <div class="records-header">
       <h2>Scoring Records</h2>
       <div class="records-actions">
+        <button class="btn" id="loadApi">Load from API</button>
+        <button class="btn" id="showLocal">Show local</button>
         <button class="btn" id="exportCsv">Export CSV</button>
         <button class="btn" id="exportJson">Export JSON</button>
         <button class="btn danger" id="clearRecords">Clear all</button>
       </div>
     </div>
+    <div class="source-note" id="sourceNote">Source: <b>this browser</b> (localStorage)</div>
     <div class="filters">
       <input type="text" id="filterName" placeholder="Filter by trainee…">
       <select id="filterPass">
@@ -136,7 +139,7 @@
         <tbody></tbody>
       </table>
     </div>
-    <p class="hint">Stored locally (<span class="mono">localStorage</span>). Export to CSV/JSON to query elsewhere.</p>
+    <p class="hint">Local results are stored in this browser (<span class="mono">localStorage</span>). When deployed to Azure, each inspection is also POSTed to <span class="mono">/api/scores</span> — use <b>Load from API</b> here, or pull it with <span class="mono">pull-scores.ps1</span>.</p>
   </section>
 </main>
 

@@ -16,6 +16,8 @@ const PANEL_MODEL = "HOM4080M200PC";
 const SLOT_COUNT = 40;
 const STORE_KEY = "panelTrainer.records.v2";
 const PASS_THRESHOLD = 80;
+const API_BASE = "";            // same origin (Azure SWA / local dev-server)
+let apiRecords = null;          // when set, Records tab shows server data instead of localStorage
 
 /* ---- Reference data ---------------------------------------------------- */
 const WIRE_AMPACITY = { 14: 15, 12: 20, 10: 30, 8: 40, 6: 55 };      // NEC T310.16 60°C Cu
@@ -404,27 +406,49 @@ function renderRequirements() {
 /* ======================================================================= */
 function loadRecords() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch { return []; } }
 function saveRecord(rec) { const all = loadRecords(); all.unshift(rec); localStorage.setItem(STORE_KEY, JSON.stringify(all)); }
+
+/* Best-effort push to the scores API (no-ops when running statically w/o an API). */
+function pushToApi(rec) {
+  try {
+    fetch(`${API_BASE}/api/scores`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(rec) }).catch(() => {});
+  } catch (_) { /* ignore */ }
+}
+async function loadFromApi() {
+  try {
+    const res = await fetch(`${API_BASE}/api/scores`);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    apiRecords = await res.json();
+    renderRecords();
+  } catch (e) {
+    alert("Could not reach the scores API (" + e.message + ").\nThis works on the Azure deployment or via dev-server.js — not on plain static hosting.");
+  }
+}
 function recordFromResult(res) {
   return { id: "att_" + job.startTs, ts: new Date().toISOString(), trainee: ($("#traineeName").value || "Anonymous").trim(),
     difficulty: job.difficulty, circuits: job.circuits.length, score: res.score, pass: res.pass, faults: res.faults, critical: res.critical, durationSec: res.durationSec };
 }
 function renderRecords() {
-  const all = loadRecords();
+  const isApi = apiRecords != null;
+  const all = isApi ? apiRecords : loadRecords();
+  const note = $("#sourceNote");
+  note.classList.toggle("api", isApi);
+  note.innerHTML = isApi ? `Source: <b>API (${escapeHtml(location.host)})</b> — server data` : `Source: <b>this browser</b> (localStorage)`;
+
   const nameF = $("#filterName").value.trim().toLowerCase(), passF = $("#filterPass").value, minF = Number($("#filterMinScore").value) || 0;
-  const rows = all.filter(r => (!nameF || r.trainee.toLowerCase().includes(nameF)) && (!passF || (passF === "pass" ? r.pass : !r.pass)) && (r.score >= minF));
-  const n = rows.length, passCount = rows.filter(r => r.pass).length, avg = n ? Math.round(rows.reduce((s, r) => s + r.score, 0) / n) : 0;
+  const rows = all.filter(r => (!nameF || String(r.trainee || "").toLowerCase().includes(nameF)) && (!passF || (passF === "pass" ? r.pass : !r.pass)) && (Number(r.score) >= minF));
+  const n = rows.length, passCount = rows.filter(r => r.pass).length, avg = n ? Math.round(rows.reduce((s, r) => s + Number(r.score), 0) / n) : 0;
   $("#recordStats").innerHTML = `<span><b>${n}</b> attempt(s)</span><span><b>${n ? Math.round((passCount / n) * 100) : 0}%</b> pass rate</span><span><b>${avg}%</b> avg score</span>`;
   const tbody = $("#recordsTable tbody"); tbody.innerHTML = "";
-  if (!rows.length) { tbody.innerHTML = `<tr class="empty-row"><td colspan="8">No records yet. Complete an inspection on the Panel tab.</td></tr>`; return; }
+  if (!rows.length) { tbody.innerHTML = `<tr class="empty-row"><td colspan="8">${isApi ? "No records on the server yet." : "No records yet. Complete an inspection on the Panel tab."}</td></tr>`; return; }
   for (const r of rows) {
     const tr = document.createElement("tr");
     tr.innerHTML = `<td class="mono">${new Date(r.ts).toLocaleString()}</td><td>${escapeHtml(r.trainee)}</td><td>${r.difficulty}</td>
       <td class="mono">${r.score}%</td><td><span class="pill ${r.pass ? "pass" : "fail"}">${r.pass ? "PASS" : "FAIL"}</span></td>
       <td class="mono">${r.faults} (${r.critical} crit)</td><td class="mono">${r.durationSec}s</td>
-      <td><button class="link-btn" data-del="${r.id}">delete</button></td>`;
+      <td>${isApi ? "" : `<button class="link-btn" data-del="${r.id}">delete</button>`}</td>`;
     tbody.appendChild(tr);
   }
-  tbody.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => { localStorage.setItem(STORE_KEY, JSON.stringify(loadRecords().filter(x => x.id !== b.dataset.del))); renderRecords(); }));
+  if (!isApi) tbody.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => { localStorage.setItem(STORE_KEY, JSON.stringify(loadRecords().filter(x => x.id !== b.dataset.del))); renderRecords(); }));
 }
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function download(filename, text, type) { const blob = new Blob([text], { type }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url); }
@@ -462,12 +486,14 @@ document.addEventListener("DOMContentLoaded", () => {
     renderPanelTab();
   });
   $("#resetBtn").addEventListener("click", () => { if (job) { job.units = []; job.startTs = Date.now(); $("#result").classList.add("hidden"); renderPanel(); } });
-  $("#inspectBtn").addEventListener("click", () => { if (!job) return; const res = scoreJob(); saveRecord(recordFromResult(res)); renderResult(res); });
+  $("#inspectBtn").addEventListener("click", () => { if (!job) return; const res = scoreJob(); const rec = recordFromResult(res); saveRecord(rec); pushToApi(rec); renderResult(res); });
 
   $("#copyMd").addEventListener("click", () => { if (job) navigator.clipboard?.writeText(jobMarkdown()); });
   $("#downloadMd").addEventListener("click", () => { if (job) download("panel_work_order.md", jobMarkdown(), "text/markdown"); });
 
   ["filterName", "filterPass", "filterMinScore"].forEach(id => $("#" + id).addEventListener("input", renderRecords));
+  $("#loadApi").addEventListener("click", loadFromApi);
+  $("#showLocal").addEventListener("click", () => { apiRecords = null; renderRecords(); });
   $("#exportCsv").addEventListener("click", exportCsv);
   $("#exportJson").addEventListener("click", () => download("panel_trainer_records.json", JSON.stringify(loadRecords(), null, 2), "application/json"));
   $("#clearRecords").addEventListener("click", () => { if (confirm("Delete ALL scoring records? This cannot be undone.")) { localStorage.removeItem(STORE_KEY); renderRecords(); } });
