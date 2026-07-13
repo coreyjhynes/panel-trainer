@@ -1,7 +1,7 @@
 {
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/api/*", "/*.css", "/*.js", "/*.md"]
+    "exclude": ["/api/*", "/*.css", "/*.js", "/*.md", "/scenarios.html"]
   },
   "routes": [
     { "route": "/api/*", "methods": ["GET", "POST", "DELETE", "OPTIONS"], "allowedRoles": ["anonymous"] }

@@ -31,6 +31,23 @@ h1, h2 { margin: 0; font-weight: 650; }
 .tabs { display: flex; gap: 6px; }
 .tab { background: transparent; color: var(--muted); border: 1px solid transparent; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; }
 .tab.active { background: var(--panel-2); color: var(--text); border-color: var(--line); }
+a.tab { text-decoration: none; }
+
+/* Scenario authoring page */
+.scn-layout { display: grid; grid-template-columns: 300px 1fr; gap: 20px; align-items: start; }
+@media (max-width: 900px) { .scn-layout { grid-template-columns: 1fr; } }
+.scn-list, .scn-editor { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+.scn-items { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.scn-item { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; cursor: pointer; }
+.scn-item:hover { border-color: var(--accent-2); }
+.scn-item-title { font-weight: 600; font-size: 14px; }
+.scn-item-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.scn-editor label { display: block; margin: 12px 0; }
+.scn-editor input, .scn-editor textarea { width: 100%; min-width: 0; }
+.scn-editor h3 { font-size: 14px; margin: 18px 0 8px; }
+.scn-id { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.scn-add { display: flex; gap: 8px; margin-bottom: 10px; }
+.scn-add select { flex: 1; }
 .tabpane { display: none; padding: 22px; max-width: 1240px; margin: 0 auto; }
 .tabpane.active { display: block; }
 

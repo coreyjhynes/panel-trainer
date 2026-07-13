@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel Trainer · Scenarios</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">⚡</span>
+    <div>
+      <h1>Scenario Library</h1>
+      <p class="subtitle">Author challenges · generate lab-instruction Markdown</p>
+    </div>
+  </div>
+  <nav class="tabs">
+    <a class="tab" href="index.html">Panel</a>
+  </nav>
+</header>
+
+<main class="tabpane active">
+  <div class="scn-layout">
+    <!-- Scenario list -->
+    <aside class="scn-list">
+      <div class="records-header">
+        <h2>Scenarios</h2>
+        <button class="btn primary" id="newBtn">+ New</button>
+      </div>
+      <div id="scnList" class="scn-items"></div>
+    </aside>
+
+    <!-- Editor -->
+    <section class="scn-editor">
+      <div id="editorEmpty" class="empty-note">Select a scenario or create a new one.</div>
+
+      <div id="editor" class="hidden">
+        <div class="records-header">
+          <h2 id="editorTitle">New scenario</h2>
+          <div class="records-actions">
+            <button class="btn danger hidden" id="deleteBtn">Delete</button>
+            <button class="btn primary" id="saveBtn">Save</button>
+          </div>
+        </div>
+        <div class="scn-id mono" id="scnId"></div>
+
+        <label>Title
+          <input type="text" id="fTitle" placeholder="e.g. Kitchen &amp; Range Basics">
+        </label>
+        <label>Description
+          <textarea id="fDesc" rows="2" placeholder="Short scenario description shown in lab instructions."></textarea>
+        </label>
+
+        <h3>Required circuits</h3>
+        <div class="scn-add">
+          <select id="catalogSel"></select>
+          <button class="btn" id="addCircuitBtn">Add circuit</button>
+        </div>
+        <div class="table-wrap">
+          <table id="circuitsTable">
+            <thead><tr><th>Load</th><th>Volts</th><th>Breaker</th><th>Poles</th><th>Wire</th><th>Protection</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div id="savedBox" class="hidden">
+          <div class="records-header" style="margin-top:18px">
+            <h3>Lab-instruction Markdown</h3>
+            <div class="records-actions">
+              <button class="btn" id="copyMd">Copy</button>
+              <button class="btn" id="downloadMd">Download .md</button>
+            </div>
+          </div>
+          <pre id="mdOut" class="md-src"></pre>
+          <div class="records-header" style="margin-top:14px">
+            <h3>Try it on the live panel</h3>
+            <div class="records-actions">
+              <button class="btn" id="completeBtn">Send 100% solution to panel</button>
+              <button class="btn" id="inspectBtn">Inspect live panel</button>
+            </div>
+          </div>
+          <div id="tryOut" class="source-note"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script src="scenarios.js"></script>
+</body>
+</html>

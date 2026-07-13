@@ -1,63 +1,77 @@
-/* Storage abstraction for scoring records.
-   - If AZURE_STORAGE_CONNECTION_STRING is set → Azure Table Storage (durable).
-   - Otherwise → in-memory array (per warm instance; fine for local dev / demo).
-   The @azure/data-tables SDK is required lazily so local dev needs no install. */
+/* Storage for scenarios + the live panel state.
+   - Durable (Azure Table Storage) when AZURE_STORAGE_CONNECTION_STRING is set.
+   - In-memory fallback otherwise (local dev). @azure/data-tables loaded lazily. */
 
 const CONN = process.env.AZURE_STORAGE_CONNECTION_STRING;
-const TABLE = process.env.SCORES_TABLE || "scores";
-let memory = [];
 
-// The single "current panel" synced from the running app. In-memory (per
-// worker) so no durable storage is used; see DEPLOY-AZURE.md for the caveat.
-let currentState = null;
-async function setState(s) { currentState = s; }
-async function getState() { return currentState; }
-
-async function getClient() {
+let clientCache = {};
+async function table(name) {
   if (!CONN) return null;
+  if (clientCache[name]) return clientCache[name];
   const { TableClient } = require("@azure/data-tables");
-  const client = TableClient.fromConnectionString(CONN, TABLE);
-  try { await client.createTable(); } catch (_) { /* already exists */ }
-  return client;
+  const c = TableClient.fromConnectionString(CONN, name);
+  try { await c.createTable(); } catch (_) { /* exists */ }
+  clientCache[name] = c;
+  return c;
 }
 
-function toEntity(r) { return { partitionKey: "score", rowKey: r.id, ...r }; }
+/* ---- Scenarios ---------------------------------------------------------- */
+let scenariosMem = {};   // id -> scenario
+
+function toEntity(s) {
+  return { partitionKey: "s", rowKey: s.id, title: s.title || "", description: s.description || "",
+    circuits: JSON.stringify(s.circuits || []), updatedAt: s.updatedAt || new Date().toISOString() };
+}
 function fromEntity(e) {
-  const { partitionKey, rowKey, etag, timestamp, ...rest } = e;
-  return rest;
+  let circuits = [];
+  try { circuits = JSON.parse(e.circuits || "[]"); } catch (_) {}
+  return { id: e.rowKey, title: e.title, description: e.description, circuits, updatedAt: e.updatedAt };
 }
 
-async function listScores() {
-  const client = await getClient();
-  if (!client) return memory.slice();
-  const items = [];
-  for await (const e of client.listEntities()) items.push(fromEntity(e));
-  return items;
+async function listScenarios() {
+  const t = await table("scenarios");
+  if (!t) return Object.values(scenariosMem);
+  const out = [];
+  for await (const e of t.listEntities()) out.push(fromEntity(e));
+  return out;
+}
+async function getScenario(id) {
+  const t = await table("scenarios");
+  if (!t) return scenariosMem[id] || null;
+  try { return fromEntity(await t.getEntity("s", id)); } catch (_) { return null; }
+}
+async function saveScenario(s) {
+  s.updatedAt = new Date().toISOString();
+  const t = await table("scenarios");
+  if (!t) { scenariosMem[s.id] = s; return s; }
+  await t.upsertEntity(toEntity(s), "Replace");
+  return s;
+}
+async function deleteScenario(id) {
+  const t = await table("scenarios");
+  if (!t) { delete scenariosMem[id]; return; }
+  try { await t.deleteEntity("s", id); } catch (_) {}
 }
 
-async function addScore(rec) {
-  const client = await getClient();
-  if (!client) { memory.unshift(rec); return rec; }
-  await client.createEntity(toEntity(rec));
-  return rec;
+/* ---- Live panel state (single current panel + revision) ----------------- */
+let stateMem = { units: [], rev: 0, setBy: null, updatedAt: null };
+
+async function getState() {
+  const t = await table("runtime");
+  if (!t) return { ...stateMem };
+  try {
+    const e = await t.getEntity("r", "panel");
+    let units = []; try { units = JSON.parse(e.units || "[]"); } catch (_) {}
+    return { units, rev: Number(e.rev) || 0, setBy: e.setBy || null, updatedAt: e.updatedAt || null };
+  } catch (_) { return { units: [], rev: 0, setBy: null, updatedAt: null }; }
+}
+async function setState(units, setBy) {
+  const cur = await getState();
+  const next = { units: Array.isArray(units) ? units : [], rev: (cur.rev || 0) + 1, setBy: setBy || null, updatedAt: new Date().toISOString() };
+  const t = await table("runtime");
+  if (!t) { stateMem = next; return next; }
+  await t.upsertEntity({ partitionKey: "r", rowKey: "panel", units: JSON.stringify(next.units), rev: next.rev, setBy: next.setBy, updatedAt: next.updatedAt }, "Replace");
+  return next;
 }
 
-/* Upsert: one record per instance id (re-inspecting a run replaces its result). */
-async function upsertScore(rec) {
-  const client = await getClient();
-  if (!client) {
-    memory = memory.filter((r) => r.id !== rec.id);
-    memory.unshift(rec);
-    return rec;
-  }
-  await client.upsertEntity(toEntity(rec), "Replace");
-  return rec;
-}
-
-async function clearScores() {
-  const client = await getClient();
-  if (!client) { memory = []; return; }
-  for await (const e of client.listEntities()) await client.deleteEntity(e.partitionKey, e.rowKey);
-}
-
-module.exports = { listScores, addScore, upsertScore, clearScores, setState, getState, usingTable: !!CONN };
+module.exports = { listScenarios, getScenario, saveScenario, deleteScenario, getState, setState, usingTable: !!CONN };

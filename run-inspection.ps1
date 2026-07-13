@@ -1,31 +1,30 @@
 <#
-    Panel Install Trainer - remote "Run inspection".
+    Panel Install Trainer - grade the live panel against a scenario.
 
-    Equivalent of clicking the app's "Run inspection" button. The panel lives in
-    the running app (it syncs its current panel to the server); this script just
-    asks the application to inspect that panel and hands back the result.
-
-    NO panel and NO scoring logic live here - only the API call.
+    Asks the running app to score its current panel against a specific scenario
+    (the panel lives in the app; the app/API do the scoring). No panel and no
+    scoring logic live here.
 
     Returns one object:
         Pass    = [bool]     TRUE = PASS, FALSE = FAIL
         Details = [string[]] detailed scoring findings
-
-    Paste-and-run: no command-line arguments (edit $ApiBase if needed).
 #>
 
-$ApiBase = "https://wonderful-sea-0d849fb0f.7.azurestaticapps.net"   # the running app
+$ApiBase    = "https://wonderful-sea-0d849fb0f.7.azurestaticapps.net"   # the running app
+$ScenarioId = "REPLACE-WITH-SCENARIO-ID"                                # the scenario to grade against
 
-# ---- Ask the app to inspect its current panel -------------------------------
+# ---- Ask the app to inspect its live panel against the scenario -------------
 $ErrorActionPreference = "Stop"
-$result = Invoke-RestMethod -Uri "$($ApiBase.TrimEnd('/'))/api/inspect" -Method Get -TimeoutSec 15
+$result = Invoke-RestMethod -Uri "$($ApiBase.TrimEnd('/'))/api/inspect" -Method Post `
+                            -ContentType "application/json" `
+                            -Body (@{ scenarioId = $ScenarioId } | ConvertTo-Json) -TimeoutSec 15
 
 # ---- Shape the result -------------------------------------------------------
 $Pass = [bool]$result.pass
 
 $Details = @()
-$Details += ("SCORE {0}% - {1} ({2} fault(s), {3} critical)" -f `
-    $result.score, $(if ($Pass) { "PASS" } else { "FAIL" }), $result.faults, $result.critical)
+$Details += ("SCENARIO {0} - SCORE {1}% - {2} ({3} fault(s), {4} critical)" -f `
+    $result.scenarioId, $result.score, $(if ($Pass) { "PASS" } else { "FAIL" }), $result.faults, $result.critical)
 foreach ($circuit in $result.details) {
     foreach ($issue in $circuit.issues) {
         $Details += ("[{0}] {1}: {2}" -f $issue.level.ToUpper(), $circuit.name, $issue.text)

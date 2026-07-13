@@ -16,18 +16,13 @@
     </div>
   </div>
   <nav class="tabs">
-    <button class="tab active" data-tab="req">Requirements</button>
-    <button class="tab" data-tab="sim">Panel</button>
-    <button class="tab" data-tab="records">Records</button>
+    <a class="tab" href="scenarios.html">Scenarios</a>
   </nav>
 </header>
 
-<!-- ===================== PANEL (workbench) ===================== -->
-<main id="tab-sim" class="tabpane">
-  <div id="noJob" class="empty-note">No job loaded. Go to the <b>Requirements</b> tab, choose a difficulty, and start a job.</div>
-
-  <div id="simLayout" class="sim-layout hidden">
-    <!-- Hardware rail (sticky, on the side) -->
+<main class="tabpane active">
+  <div class="sim-layout">
+    <!-- Hardware rail -->
     <aside class="rail">
       <div class="bin">
         <div class="bin-title">Breakers</div>
@@ -52,7 +47,7 @@
         <div class="tiles" id="wireTiles"></div>
       </div>
       <div class="rail-actions">
-        <button class="btn" id="resetBtn">Reset panel</button>
+        <button class="btn" id="clearBtn">Clear panel</button>
       </div>
     </aside>
 
@@ -66,52 +61,7 @@
       <div class="deadfront" id="slots"></div>
     </section>
   </div>
-</main>
-
-<!-- ===================== REQUIREMENTS ===================== -->
-<main id="tab-req" class="tabpane active">
-  <section class="records">
-    <div class="setup-row">
-      <label>Difficulty
-        <select id="difficulty">
-          <option value="basic">Basic (5 circuits)</option>
-          <option value="standard" selected>Standard (7 circuits)</option>
-          <option value="advanced">Advanced (9 circuits)</option>
-        </select>
-      </label>
-      <button class="btn primary" id="startBtn">Start / regenerate job</button>
-    </div>
-
-    <div id="reqEmpty" class="empty-note">Start a job to generate its scenario and work order.</div>
-
-    <div id="reqBody" class="hidden">
-      <div class="records-header" style="margin-top:18px">
-        <h2 id="reqTitle">Work Order</h2>
-        <div class="records-actions">
-          <button class="btn" id="copyMd">Copy markdown</button>
-          <button class="btn" id="downloadMd">Download .md</button>
-        </div>
-      </div>
-      <div id="reqRendered"></div>
-      <details class="md-details">
-        <summary>Raw Markdown (importable)</summary>
-        <pre id="reqMarkdown" class="md-src"></pre>
-      </details>
-    </div>
-  </section>
-</main>
-
-<!-- ===================== RECORDS (inspection + single result) ===================== -->
-<main id="tab-records" class="tabpane">
-  <section class="records">
-    <div class="records-header">
-      <h2>Run Inspection</h2>
-      <button class="btn primary hidden" id="inspectBtn">Run inspection</button>
-    </div>
-    <p class="hint">Scores the <b>current</b> state of your panel using the external scoring service and records <b>one</b> result for this run (re-running replaces it). No history is kept in the app &mdash; query results with <span class="mono">score-and-pull.ps1</span> or <span class="mono">GET /api/scores</span>.</p>
-    <div id="noJobRecords" class="empty-note">No job loaded. Choose a difficulty on the <b>Requirements</b> tab and start a job, then build your panel.</div>
-    <div class="result hidden" id="result"></div>
-  </section>
+  <p class="hint" id="syncNote">Build the panel to meet the scenario requirements shown in your lab instructions. Your panel is saved automatically.</p>
 </main>
 
 <script src="app.js"></script>
