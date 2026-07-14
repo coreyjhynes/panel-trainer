@@ -6,8 +6,8 @@
     Edit the three values below (no command-line arguments needed).
 
     Returns one object:
-        Pass    = [bool]     TRUE = PASS, FALSE = FAIL
-        Details = [string[]] detailed scoring findings
+        Pass    = [bool]   TRUE = PASS, FALSE = FAIL
+        Details = [string] readable, multi-line scoring report (one finding per line)
 #>
 
 $ApiBase    = "https://wonderful-sea-0d849fb0f.7.azurestaticapps.net"  # the running app
@@ -21,15 +21,19 @@ $result = Invoke-RestMethod -Uri "$($ApiBase.TrimEnd('/'))/api/inspect" -Method 
 
 $Pass = [bool]$result.pass
 
-$Details = @()
-$Details += ("SCENARIO {0} - {1} {2}% ({3} fault(s), {4} critical)" -f `
-    $result.scenarioId, $(if ($Pass) { "PASS" } else { "FAIL" }), $result.score, $result.faults, $result.critical)
+# Build a readable, multi-line report (one line per finding).
+$lines = @()
+$lines += ("Scenario : {0}" -f $result.scenarioId)
+$lines += ("Result   : {0}  ({1}%, {2} fault(s), {3} critical)" -f `
+    $(if ($Pass) { "PASS" } else { "FAIL" }), $result.score, $result.faults, $result.critical)
+$lines += "Findings :"
 foreach ($circuit in $result.details) {
     foreach ($issue in $circuit.issues) {
-        $Details += ("[{0}] {1}: {2}" -f $issue.level.ToUpper(), $circuit.name, $issue.text)
+        $lines += ("  [{0,-4}] {1}: {2}" -f $issue.level.ToUpper(), $circuit.name, $issue.text)
     }
 }
-$Details = [string[]]$Details
+$Details = $lines -join [Environment]::NewLine
 
-# Output both results (change to `$Pass` alone if your engine wants a bare bool).
+# Return the boolean plus the multi-line detail report.
 [PSCustomObject]@{ Pass = $Pass; Details = $Details }
+
