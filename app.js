@@ -19,9 +19,9 @@ const WIRE_TEXT = { 14: "#111", 12: "#111", 10: "#111", 8: "#fff", 6: "#fff" };
 const $ = (sel) => document.querySelector(sel);
 const clientId = "app_" + Math.random().toString(36).slice(2, 10);
 // The session (= the trainee's Project Number) isolates concurrent labs. It is
-// entered on the intro screen (or supplied via ?session=<id>) and reused in the
-// scoring/complete scripts. Sanitised to match the server's key rules.
-const SESSION_KEY = "panelTrainer.session";
+// entered on the intro screen every launch (NOT remembered — always reset on
+// refresh/relaunch) and reused in the scoring/complete scripts. A ?session=<id>
+// URL param still works. Sanitised to match the server's key rules.
 const sanitizeSession = (s) => String(s || "").trim().replace(/[^A-Za-z0-9_-]/g, "").slice(0, 60);
 let sessionId = null;
 let pollTimer = null;
@@ -180,7 +180,6 @@ function submitProject() {
 }
 
 function changeProject() {
-  try { localStorage.removeItem(SESSION_KEY); } catch (_) {}
   sessionId = null; $("#projectInput").value = "";
   showIntro();
 }
@@ -188,7 +187,6 @@ function changeProject() {
 /* Bind to a Project Number (session) and reveal the panel. */
 function startPanel(session) {
   sessionId = session;
-  try { localStorage.setItem(SESSION_KEY, session); } catch (_) {}
   // fresh view; pollState() will load this session's saved panel from the server
   panel = { units: [], nextId: 1 }; localRev = 0;
 
@@ -219,10 +217,9 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#slots").addEventListener("click", onSlotsClick);
   $("#clearBtn").addEventListener("click", () => { panel.units = []; panel.nextId = 1; changed(); });
 
-  // Session from ?session=<id>, else a remembered one, else prompt for it.
+  // Session from ?session=<id> if supplied; otherwise always prompt (never
+  // remembered — resets on every refresh/relaunch).
   const fromUrl = sanitizeSession(new URLSearchParams(location.search).get("session"));
-  const remembered = sanitizeSession(localStorage.getItem(SESSION_KEY));
   if (fromUrl) startPanel(fromUrl);
-  else if (remembered) startPanel(remembered);
   else showIntro();
 });
